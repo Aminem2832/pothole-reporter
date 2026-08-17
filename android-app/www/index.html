@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pothole Reporter</title>
+<meta name="theme-color" content="#111214">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  :root { --bg:#111214; --card:#1c1d21; --line:#2a2b30; --accent:#ff7a1a; --ok:#3ecf6f; --bad:#ff5d5d; --mut:#9a9ba1; }
+  body { background:var(--bg); color:#f2f2f4; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px); max-width:520px; margin:0 auto; }
+  h1 { font-size:22px; margin:4px 0 2px; }
+  .sub { color:var(--mut); font-size:13px; margin-bottom:14px; }
+  .banner { background:#3a2b12; border:1px solid #7a5416; color:#ffd9a8; padding:10px 12px; border-radius:10px; font-size:13px; margin-bottom:12px; display:none; }
+  button { font:inherit; border:0; border-radius:12px; cursor:pointer; }
+  .primary { width:100%; background:var(--accent); color:#1a1206; font-size:18px; font-weight:700; padding:16px; margin:6px 0 18px; }
+  .primary:active { transform:scale(.98); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; margin-bottom:12px; }
+  .row { display:flex; gap:10px; align-items:center; }
+  .thumb { width:64px; height:64px; object-fit:cover; border-radius:10px; flex:none; }
+  .big-photo { width:100%; max-height:240px; object-fit:cover; border-radius:10px; margin-bottom:10px; }
+  .chip { font-size:11px; font-weight:700; padding:3px 8px; border-radius:99px; display:inline-block; }
+  .chip.draft { background:#332a12; color:#ffca66; }
+  .chip.sent { background:#12331d; color:#7ce8a2; }
+  .chip.rejected { background:#331516; color:#ff9d9d; }
+  .chip.queued { background:#122f33; color:#7cd8e8; }
+  .meta { color:var(--mut); font-size:12px; margin-top:2px; }
+  label { display:block; font-size:12px; color:var(--mut); margin:10px 0 4px; }
+  input[type=text], textarea { width:100%; background:#131417; color:#f2f2f4; border:1px solid var(--line); border-radius:10px; padding:10px; font:inherit; font-size:14px; }
+  textarea { min-height:220px; line-height:1.45; }
+  .btn-row { display:flex; gap:10px; margin-top:12px; }
+  .send { flex:1; background:var(--ok); color:#06210f; font-weight:700; padding:14px; }
+  .ghost { flex:1; background:#26272c; color:#f2f2f4; padding:14px; }
+  .danger { background:#3a1a1a; color:#ff9d9d; }
+  .status { text-align:center; color:var(--mut); padding:26px 0; }
+  .spin { width:28px; height:28px; border:3px solid var(--line); border-top-color:var(--accent); border-radius:50%;
+          margin:0 auto 12px; animation:s 0.8s linear infinite; }
+  @keyframes s { to { transform:rotate(360deg); } }
+  .hidden { display:none !important; }
+  .verdict { font-size:16px; font-weight:700; margin-bottom:4px; }
+  .empty { text-align:center; color:var(--mut); font-size:14px; padding:20px 0; }
+  h2 { font-size:15px; color:var(--mut); font-weight:600; margin:18px 0 10px; }
+</style>
+</head>
+<body>
+  <div class="row" style="justify-content:space-between;align-items:flex-start">
+    <div>
+      <h1>Pothole Reporter</h1>
+      <div class="sub">Shoot it. Verify it. Report it to BBMP.</div>
+    </div>
+    <button class="ghost" id="gearBtn" style="flex:none;padding:10px 14px" aria-label="Settings">&#9881;&#65039;</button>
+  </div>
+  <div id="banner" class="banner"></div>
+
+  <div id="home">
+    <button class="primary" id="captureBtn">&#128247; &nbsp;Report a pothole</button>
+    <button class="primary" id="driveBtn" style="background:#26272c;color:#f2f2f4;margin-top:-8px">&#128663; &nbsp;Drive mode</button>
+    <input type="file" id="fileInput" accept="image/*" capture="environment" class="hidden">
+    <h2>Your reports</h2>
+    <div id="list"><div class="empty">No reports yet. Go find a pothole.</div></div>
+  </div>
+
+  <div id="progress" class="hidden">
+    <img id="progressPhoto" class="big-photo" alt="">
+    <div class="status"><div class="spin"></div><div id="progressText">Working...</div></div>
+  </div>
+
+  <div id="detail" class="hidden"></div>
+
+  <div id="drive" class="hidden">
+    <div style="position:relative">
+      <video id="driveVideo" autoplay playsinline muted style="width:100%;border-radius:14px;background:#000;min-height:340px"></video>
+      <button id="driveStop" style="position:absolute;top:12px;right:12px;background:var(--bad);color:#fff;font-size:17px;font-weight:700;padding:14px 24px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.5)">&#9632; Stop</button>
+      <div style="position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.6);padding:8px 12px;border-radius:10px;max-width:75%">
+        <div class="verdict" id="driveCount" style="margin:0;font-size:16px;color:#fff">0 potholes</div>
+        <div class="meta" id="driveStatus" style="color:#d5d5da">Starting...</div>
+      </div>
+    </div>
+    <div class="meta" style="text-align:center;margin-top:10px">Mount the phone facing the road. Frames are checked continuously while you move (about every 10 meters). The back button also stops the drive.</div>
+  </div>
+
+  <div id="settings" class="hidden">
+    <div class="card">
+      <div class="verdict">Settings</div>
+      <div class="meta" id="settingsHint" style="margin-bottom:6px"></div>
+      <label>OpenAI API key (stored only on this device)</label>
+      <input type="password" id="setKey" placeholder="sk-...">
+      <label>Your name (signs the complaints)</label>
+      <input type="text" id="setName" placeholder="Gaurav Sen">
+      <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;color:#f2f2f4">
+        <input type="checkbox" id="setDebug" style="width:18px;height:18px;accent-color:var(--accent)">
+        Debug mode: keep every drive frame for review
+      </label>
+      <div class="meta" style="margin-top:10px">Complaints are always created as email drafts addressed to the concerned corporation officer. Nothing sends until you press send in your email app.</div>
+      <button class="ghost danger" id="wipeBtn" style="width:100%;margin-top:12px">Delete all reports and photos</button>
+      <div class="btn-row">
+        <button class="ghost" id="setBack">Back</button>
+        <button class="send" id="setSave">Save</button>
+      </div>
+    </div>
+  </div>
+
+<script src="standalone.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+let health = { ai_configured: true, email_configured: false, delivery: "gmail_draft" };
+
+function show(screen) {
+  for (const s of ["home", "progress", "detail", "drive", "settings"]) $(s).classList.toggle("hidden", s !== screen);
+  window.scrollTo(0, 0);
+}
+
+function fmtDate(ts) { return new Date(ts * 1000).toLocaleString([], {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"}); }
+
+const sendLabel = () => "Email";
+
+function chip(status) {
+  const label = { draft: "Draft", sent: "Sent", queued: "Opened in email", rejected: "Not a pothole" }[status] || status;
+  return `<span class="chip ${status}">${label}</span>`;
+}
+
+async function api(path, opts) {
+  return StandaloneAPI.handle(path, opts);
+}
+
+async function loadHealth() {
+  try {
+    health = await api("/api/health");
+    const b = $("banner");
+    if (!health.ai_configured) {
+      b.textContent = "Setup needed: tap the gear icon and paste your OpenAI API key.";
+      b.style.display = "block";
+    } else { b.style.display = "none"; }
+  } catch (e) {}
+}
+
+async function loadReports() {
+  const reports = await api("/api/reports");
+  loadReports.latest = reports;
+  const list = $("list");
+  if (!reports.length) { list.innerHTML = '<div class="empty">No reports yet. Go find a pothole.</div>'; return; }
+  const cardHtml = (r) => `
+    <div class="card row" data-id="${r.id}" style="cursor:pointer">
+      <img class="thumb" src="${r.photo_url}" alt="">
+      <div style="min-width:0">
+        <div>${chip(r.status)} ${r.size ? `<span class="chip" style="background:#26272c;color:#cfcfd4">${r.size}</span>` : ""}</div>
+        <div class="meta">${fmtDate(r.created_at)}${r.address ? " &middot; " + r.address.split(",").slice(0, 2).join(", ") : ""}</div>
+      </div>
+    </div>`;
+  // Group consecutive records from the same drive session under one header.
+  const groups = [];
+  for (const r of reports) {
+    const g = groups[groups.length - 1];
+    if (r.drive_id && g && g.driveId === r.drive_id) g.items.push(r);
+    else groups.push({ driveId: r.drive_id || null, items: [r] });
+  }
+  list.innerHTML = groups.map((g) => {
+    const cards = g.items.map(cardHtml).join("");
+    if (!g.driveId) return cards;
+    const found = g.items.filter((x) => x.status === "draft" || x.status === "queued" || x.status === "sent").length;
+    const start = g.items[g.items.length - 1].created_at;
+    return `<div class="meta" style="margin:16px 0 6px;font-weight:600">&#128663; Drive &middot; ${fmtDate(start)} &middot; ${g.items.length} ${g.items.length === 1 ? "frame" : "frames"}, ${found} ${found === 1 ? "pothole" : "potholes"}</div>` + cards;
+  }).join("");
+  for (const el of list.querySelectorAll("[data-id]")) {
+    el.onclick = () => openDetail(reports.find(r => r.id == el.dataset.id));
+  }
+}
+
+function getPosition() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
+      () => resolve(null),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
+    );
+  });
+}
+
+async function handleFile(file) {
+  if (!file) return;
+  $("progressPhoto").src = URL.createObjectURL(file);
+  $("progressText").textContent = "Getting your location...";
+  show("progress");
+  const pos = await getPosition();
+  $("progressText").textContent = "Checking the photo for potholes...";
+  const fd = new FormData();
+  fd.append("photo", file);
+  if (pos) { fd.append("lat", pos.lat); fd.append("lng", pos.lng); }
+  try {
+    const report = await api("/api/report", { method: "POST", body: fd });
+    await loadReports();
+    openDetail(report);
+  } catch (e) {
+    alert(e.message);
+    show("home");
+  }
+}
+
+function openDetail(r) {
+  const d = $("detail");
+  if (r.status === "rejected") {
+    d.innerHTML = `
+      <div class="card">
+        <img class="big-photo" src="${r.photo_url}" alt="">
+        <div class="verdict" style="color:var(--bad)">No pothole confirmed</div>
+        <div class="meta">${r.description || ""} (confidence ${(r.confidence * 100).toFixed(0)}%${r.is_pothole ? "" : ", not classified as a pothole"})</div>
+        <div class="btn-row">
+          <button class="ghost" id="backBtn">Back</button>
+          <button class="ghost danger" id="discardBtn">Delete</button>
+        </div>
+      </div>`;
+  } else {
+    // "queued" stays editable and reopenable: the user may have canceled the
+    // email composer and must not be stranded.
+    const sent = r.status === "sent";
+    const verdictText = r.status === "sent" ? "Complaint sent"
+      : r.status === "queued"
+      ? "Opened in your email app. Edit and resend if you didn't send it."
+      : `${(r.size || "").toUpperCase()} pothole detected (${(r.confidence * 100).toFixed(0)}% confident)`;
+    d.innerHTML = `
+      <div class="card">
+        <img class="big-photo" src="${r.photo_url}" alt="">
+        <div class="verdict" style="color:${sent ? "var(--ok)" : "var(--accent)"}">
+          ${verdictText}
+        </div>
+        ${r.address ? `<div class="meta">&#128205; ${r.address}</div>` : ""}
+        ${r.officer_name ? `<div class="meta">&#128231; Routes to: ${r.officer_name}</div>` : ""}
+        ${r.tender_note ? `<div class="meta">&#128209; ${r.tender_note}</div>` : ""}
+        <label>Email subject</label>
+        <input type="text" id="subj" value="" ${sent ? "disabled" : ""}>
+        <label>Email body (review before sending)</label>
+        <textarea id="body" ${sent ? "disabled" : ""}></textarea>
+        <div class="btn-row">
+          <button class="ghost" id="backBtn">Back</button>
+          ${sent ? "" : `<button class="ghost danger" id="discardBtn">Discard</button>
+          <button class="send" id="sendBtn">${sendLabel()} &#9993;</button>`}
+        </div>
+      </div>`;
+    $("subj").value = r.email_subject || "";
+    $("body").value = r.email_body || "";
+    if (!sent) $("sendBtn").onclick = () => sendReport(r);
+  }
+  $("backBtn").onclick = () => { show("home"); loadReports(); };
+  const discard = $("discardBtn");
+  if (discard) discard.onclick = async () => {
+    if (!confirm("Delete this report?")) return;
+    try { await api(`/api/reports/${r.id}`, { method: "DELETE" }); } catch (e) { alert(e.message); return; }
+    await loadReports(); show("home");
+  };
+  show("detail");
+}
+
+async function sendReport(r) {
+  // The draft is always addressed to the routed officer; nothing ever auto-sends.
+  const to = r.officer_email || "the concerned officer";
+  if (!confirm(`Open your email app with the complaint addressed to ${to}?`)) return;
+  const btn = $("sendBtn");
+  btn.disabled = true; btn.textContent = "Working...";
+  try {
+    await api(`/api/reports/${r.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email_subject: $("subj").value, email_body: $("body").value }),
+    });
+    const updated = await api(`/api/reports/${r.id}/send`, { method: "POST" });
+    await loadReports();
+    openDetail(updated);
+  } catch (e) {
+    alert(e.message);
+    btn.disabled = false; btn.textContent = sendLabel() + " ✉";
+  }
+}
+
+// ---------- Drive Mode ----------
+const FRAME_INTERVAL_MS = 1200;
+const MIN_MOVE_METERS = 8;
+const STILL_CAPTURE_MS = 8000; // capture at least this often even when not moving
+const GPS_MAX_AGE_MS = 10000; // a fix older than this is stale: pause rather than mistag
+const MAX_IN_FLIGHT = 3;
+let drive = null;
+let driveStarting = false;
+
+function distMeters(a, b) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+async function startDrive() {
+  // Synchronous reentry guard: a second tap during the camera permission prompt
+  // must not start a parallel drive session and leak the first camera stream.
+  if (drive || driveStarting) return;
+  driveStarting = true;
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 } },
+      audio: false,
+    });
+  } catch (e) { driveStarting = false; alert("Camera access failed: " + e.message); return; }
+  $("driveVideo").srcObject = stream;
+  drive = { stream, pos: null, lastCapPos: null, checked: 0, found: 0, inFlight: 0, errors: 0, wakeLock: null, foundSpots: [], sessionId: String(Date.now()), startedAt: Date.now(), imageCapture: null, stillFailed: false, stillBusy: false };
+  try {
+    if (window.ImageCapture) drive.imageCapture = new ImageCapture(stream.getVideoTracks()[0]);
+  } catch (e) {}
+  try { drive.wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
+  drive.watchId = navigator.geolocation.watchPosition(
+    (p) => { if (drive) { drive.pos = { lat: p.coords.latitude, lng: p.coords.longitude }; drive.posAt = Date.now(); } },
+    () => {},
+    { enableHighAccuracy: true, maximumAge: 2000 }
+  );
+  drive.timer = setInterval(driveTick, FRAME_INTERVAL_MS);
+  updateHud("Waiting for GPS...");
+  show("drive");
+  driveStarting = false;
+}
+
+function updateHud(status) {
+  if (!drive) return;
+  $("driveCount").textContent = `${drive.found} ${drive.found === 1 ? "pothole" : "potholes"}`;
+  const mode = drive.imageCapture && !drive.stillFailed ? "stills" : "preview";
+  $("driveStatus").textContent = status ||
+    `Scanning (${mode})... ${drive.checked} checked${drive.inFlight ? `, ${drive.inFlight} analyzing` : ""}`;
+}
+
+const withTimeout = (p, ms) =>
+  Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("capture timeout")), ms))]);
+
+// Night boost, clock-based (7 PM to 5 AM local): lift brightness and contrast.
+function applyNightBoost(ctx, draw) {
+  const hour = new Date().getHours();
+  if (hour >= 19 || hour < 5) {
+    ctx.filter = "brightness(1.6) contrast(1.15)";
+    draw();
+    ctx.filter = "none";
+  }
+}
+
+function grabPreview(video) {
+  const canvas = document.createElement("canvas");
+  const scale = Math.min(1, 1280 / video.videoWidth);
+  canvas.width = Math.round(video.videoWidth * scale);
+  canvas.height = Math.round(video.videoHeight * scale);
+  const ctx = canvas.getContext("2d");
+  const draw = () => ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  draw();
+  applyNightBoost(ctx, draw);
+  return new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.8));
+}
+
+async function rescaleBlob(blob, maxDim) {
+  const bmp = await createImageBitmap(blob, { imageOrientation: "from-image" });
+  const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bmp.width * scale);
+  canvas.height = Math.round(bmp.height * scale);
+  const ctx = canvas.getContext("2d");
+  const draw = () => ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  draw();
+  applyNightBoost(ctx, draw);
+  return new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
+}
+
+async function captureFrame(video) {
+  // Prefer a true camera still (sharp, photo-grade exposure). Any failure
+  // permanently falls back to preview grabs for this drive, so the worst
+  // case is exactly the old behavior.
+  if (drive && drive.imageCapture && !drive.stillFailed) {
+    try {
+      const still = await withTimeout(drive.imageCapture.takePhoto(), 2500);
+      const out = await rescaleBlob(still, 2000);
+      if (out) return out;
+      drive.stillFailed = true;
+    } catch (e) {
+      if (drive) drive.stillFailed = true;
+    }
+  }
+  return grabPreview(video);
+}
+
+async function driveTick() {
+  if (!drive) return;
+  const video = $("driveVideo");
+  if (!video.videoWidth) return;
+  const gpsFresh = drive.pos && Date.now() - (drive.posAt || 0) <= GPS_MAX_AGE_MS;
+  if (!gpsFresh) {
+    updateHud(!drive.pos
+      ? (Date.now() - drive.startedAt > 30000
+        ? "Still no GPS fix after 30 s. Check that location is on with high accuracy."
+        : "Waiting for GPS...")
+      : "GPS signal lost, waiting for a fresh fix...");
+    return;
+  }
+  if (drive.inFlight >= MAX_IN_FLIGHT) { updateHud(); return; }
+  const pos = { ...drive.pos };
+  const sinceLastCapture = Date.now() - (drive.lastCapAt || 0);
+  if (drive.lastCapPos && distMeters(drive.lastCapPos, pos) < MIN_MOVE_METERS && sinceLastCapture < STILL_CAPTURE_MS) {
+    updateHud(`Holding position (${drive.checked} checked, ${drive.found} found)`);
+    return;
+  }
+  for (const s of drive.foundSpots) {
+    if (distMeters(s, pos) < 15) { updateHud(); return; }
+  }
+  if (drive.stillBusy) return; // one still capture at a time; the camera track is not reentrant
+  drive.lastCapPos = pos;
+  drive.lastCapAt = Date.now();
+  drive.stillBusy = true;
+  let blob = null;
+  try { blob = await captureFrame(video); } finally { if (drive) drive.stillBusy = false; }
+  if (!drive || !blob) return;
+  const fd = new FormData();
+  fd.append("photo", blob, "frame.jpg");
+  fd.append("lat", pos.lat);
+  fd.append("lng", pos.lng);
+  fd.append("drive_id", drive.sessionId);
+  drive.inFlight++;
+  updateHud();
+  // Fire and track: up to MAX_IN_FLIGHT frames analyze concurrently so road
+  // coverage is no longer limited by one analysis round-trip at a time.
+  api("/api/frame", { method: "POST", body: fd })
+    .then((res) => {
+      if (!drive) return;
+      drive.checked++; drive.errors = 0;
+      if (res.found) { drive.found++; drive.foundSpots.push(pos); }
+    })
+    .catch((e) => {
+      if (!drive) return;
+      drive.errors++;
+      updateHud(e.message);
+      if (drive.errors >= 5) { const msg = e.message; stopDrive(); alert("Drive mode stopped: " + msg); }
+    })
+    .finally(() => { if (drive) { drive.inFlight--; updateHud(); } });
+}
+
+function stopDrive() {
+  if (!drive) return;
+  const summary = drive.found === 0
+    ? `No potholes found in this drive (${drive.checked} frames checked${localStorage.getItem("debug_mode") === "1" ? ", debug frames saved for review" : ""}).`
+    : `Drive ended: ${drive.found} ${drive.found === 1 ? "pothole" : "potholes"} found, ${drive.checked} frames checked.`;
+  const hadActivity = drive.checked > 0 || drive.found > 0 || drive.inFlight > 0;
+  clearInterval(drive.timer);
+  navigator.geolocation.clearWatch(drive.watchId);
+  if (drive.wakeLock) drive.wakeLock.release().catch(() => {});
+  drive.stream.getTracks().forEach((t) => t.stop());
+  drive = null;
+  show("home");
+  loadReports();
+  if (hadActivity) setTimeout(() => alert(summary), 150);
+}
+
+$("driveBtn").onclick = startDrive;
+$("driveStop").onclick = stopDrive;
+
+// The OS drops the wake lock whenever the page is hidden (call, app switch,
+// power button). Re-acquire on return so the screen stays awake mid-drive.
+document.addEventListener("visibilitychange", async () => {
+  if (drive && document.visibilityState === "visible" && navigator.wakeLock) {
+    try {
+      const lock = await navigator.wakeLock.request("screen");
+      if (drive) drive.wakeLock = lock; else lock.release().catch(() => {});
+    } catch (e) {}
+  }
+});
+
+$("captureBtn").onclick = () => $("fileInput").click();
+$("fileInput").onchange = (e) => { handleFile(e.target.files[0]); e.target.value = ""; };
+
+// Live pipeline progress from the standalone engine (stage-by-stage updates).
+window.addEventListener("pipeline-progress", (e) => {
+  if (!$("progress").classList.contains("hidden")) $("progressText").textContent = e.detail;
+  else if (drive) $("driveStatus").textContent = e.detail;
+});
+
+// Native Android back button: navigate inside the app instead of exiting.
+// Drive mode stops; any other screen returns home; home lets the app exit.
+window.handleAppBack = () => {
+  if (drive) { stopDrive(); return true; }
+  for (const s of ["detail", "settings", "progress", "drive"]) {
+    if (!$(s).classList.contains("hidden")) { show("home"); loadReports(); return true; }
+  }
+  return false;
+};
+
+// Native (APK) bootstrap: trigger Android runtime permission dialogs so the
+// WebView's camera and geolocation calls are granted.
+if (window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()) {
+  (async () => {
+    try { await Capacitor.Plugins.Geolocation.requestPermissions(); } catch (e) {}
+    try { await Capacitor.Plugins.Camera.requestPermissions({ permissions: ["camera"] }); } catch (e) {}
+  })();
+}
+
+// Settings: OpenAI key and sender name. Stored on-device only.
+window.openSettings = (firstRun) => {
+  $("setKey").value = localStorage.getItem("openai_key") || "";
+  $("setName").value = localStorage.getItem("sender_name") || "";
+  $("setDebug").checked = localStorage.getItem("debug_mode") === "1";
+  $("settingsHint").textContent = firstRun
+    ? "Welcome. Paste your OpenAI API key to enable pothole detection. It is stored only on this device."
+    : "";
+  show("settings");
+};
+$("gearBtn").onclick = () => openSettings(false);
+$("setBack").onclick = () => show("home");
+$("setSave").onclick = async () => {
+  localStorage.setItem("openai_key", $("setKey").value.trim());
+  localStorage.setItem("sender_name", $("setName").value.trim());
+  localStorage.setItem("debug_mode", $("setDebug").checked ? "1" : "0");
+  await loadHealth();
+  await loadReports();
+  show("home");
+};
+$("wipeBtn").onclick = async () => {
+  if (!confirm("Delete ALL reports and their photos from this phone?")) return;
+  try { await api("/api/reports", { method: "DELETE" }); } catch (e) { alert(e.message); return; }
+  await loadReports();
+  show("home");
+};
+
+// #report-<id> deep link opens that report's detail screen directly.
+(async () => {
+  await loadHealth();
+  await loadReports();
+  const m = location.hash.match(/^#report-(\d+)$/);
+  if (m) {
+    const r = (loadReports.latest || []).find((x) => x.id == m[1]);
+    if (r) openDetail(r);
+  }
+})();
+</script>
+</body>
+</html>

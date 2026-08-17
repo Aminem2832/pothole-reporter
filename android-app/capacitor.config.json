@@ -1,0 +1,13 @@
+{
+  "appId": "com.gauravsen.potholereporter",
+  "appName": "Pothole Reporter",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

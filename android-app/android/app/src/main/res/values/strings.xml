@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Pothole Reporter</string>
+    <string name="title_activity_main">Pothole Reporter</string>
+    <string name="package_name">com.gauravsen.potholereporter</string>
+    <string name="custom_url_scheme">com.gauravsen.potholereporter</string>
+</resources>
