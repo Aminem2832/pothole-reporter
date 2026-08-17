@@ -49,7 +49,7 @@
   <div class="row" style="justify-content:space-between;align-items:flex-start">
     <div>
       <h1>Pothole Reporter</h1>
-      <div class="sub">Shoot it. Verify it. Report it to BBMP.</div>
+      <div class="sub" id="subTitle">Shoot it. Verify it. Report it to BBMP.</div>
     </div>
     <button class="ghost" id="gearBtn" style="flex:none;padding:10px 14px" aria-label="Settings">&#9881;&#65039;</button>
   </div>
@@ -59,7 +59,7 @@
     <button class="primary" id="captureBtn">&#128247; &nbsp;Report a pothole</button>
     <button class="primary" id="driveBtn" style="background:#26272c;color:#f2f2f4;margin-top:-8px">&#128663; &nbsp;Drive mode</button>
     <input type="file" id="fileInput" accept="image/*" capture="environment" class="hidden">
-    <h2>Your reports</h2>
+    <h2 id="reportsTitle">Your reports</h2>
     <div id="list"><div class="empty">No reports yet. Go find a pothole.</div></div>
   </div>
 
@@ -74,27 +74,33 @@
     <div style="position:relative">
       <video id="driveVideo" autoplay playsinline muted style="width:100%;border-radius:14px;background:#000;min-height:340px"></video>
       <button id="driveStop" style="position:absolute;top:12px;right:12px;background:var(--bad);color:#fff;font-size:17px;font-weight:700;padding:14px 24px;border-radius:12px;box-shadow:0 2px 10px rgba(0,0,0,.5)">&#9632; Stop</button>
+      <span class="hidden"></span>
       <div style="position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.6);padding:8px 12px;border-radius:10px;max-width:75%">
         <div class="verdict" id="driveCount" style="margin:0;font-size:16px;color:#fff">0 potholes</div>
         <div class="meta" id="driveStatus" style="color:#d5d5da">Starting...</div>
       </div>
     </div>
-    <div class="meta" style="text-align:center;margin-top:10px">Mount the phone facing the road. Frames are checked continuously while you move (about every 10 meters). The back button also stops the drive.</div>
+    <div class="meta" id="driveTip" style="text-align:center;margin-top:10px">Mount the phone facing the road. Frames are checked continuously while you move (about every 10 meters). The back button also stops the drive.</div>
   </div>
 
   <div id="settings" class="hidden">
     <div class="card">
-      <div class="verdict">Settings</div>
+      <div class="verdict" id="settingsTitle">Settings</div>
       <div class="meta" id="settingsHint" style="margin-bottom:6px"></div>
-      <label>OpenAI API key (stored only on this device)</label>
+      <label id="langLabel">Language / ಭಾಷೆ</label>
+      <select id="setLang" style="width:100%;background:#131417;color:#f2f2f4;border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit">
+        <option value="en">English</option>
+        <option value="kn">ಕನ್ನಡ</option>
+      </select>
+      <label id="keyLabel">OpenAI API key (stored only on this device)</label>
       <input type="password" id="setKey" placeholder="sk-...">
-      <label>Your name (signs the complaints)</label>
+      <label id="nameLabel">Your name (signs the complaints)</label>
       <input type="text" id="setName" placeholder="Gaurav Sen">
       <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;color:#f2f2f4">
         <input type="checkbox" id="setDebug" style="width:18px;height:18px;accent-color:var(--accent)">
-        Debug mode: keep every drive frame for review
+        <span id="debugLabel">Debug mode: keep every drive frame for review</span>
       </label>
-      <div class="meta" style="margin-top:10px">Complaints are always created as email drafts addressed to the concerned corporation officer. Nothing sends until you press send in your email app.</div>
+      <div class="meta" id="settingsNote" style="margin-top:10px">Complaints are always created as email drafts addressed to the concerned corporation officer. Nothing sends until you press send in your email app.</div>
       <button class="ghost danger" id="wipeBtn" style="width:100%;margin-top:12px">Delete all reports and photos</button>
       <div class="btn-row">
         <button class="ghost" id="setBack">Back</button>
@@ -106,6 +112,109 @@
 <script src="standalone.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
+
+// ---------- i18n (English / Kannada) ----------
+const I18N = {
+  en: {
+    sub: "Shoot it. Verify it. Report it to BBMP.",
+    report_btn: "&#128247; &nbsp;Report a pothole",
+    drive_btn: "&#128663; &nbsp;Drive mode",
+    your_reports: "Your reports",
+    no_reports: "No reports yet. Go find a pothole.",
+    banner_setup: "Setup needed: tap the gear icon and paste your OpenAI API key.",
+    settings_title: "Settings",
+    lang_label: "Language / ಭಾಷೆ",
+    key_label: "OpenAI API key (stored only on this device)",
+    name_label: "Your name (signs the complaints)",
+    debug_label: "Debug mode: keep every drive frame for review",
+    settings_note: "Complaints are always created as email drafts addressed to the concerned corporation officer. Nothing sends until you press send in your email app.",
+    wipe_btn: "Delete all reports and photos",
+    welcome_hint: "Welcome. Paste your OpenAI API key to enable pothole detection. It is stored only on this device.",
+    back: "Back", save: "Save", discard: "Discard", del: "Delete", email_btn: "Email", stop: "&#9632; Stop", working: "Working...",
+    chip_draft: "Draft", chip_sent: "Sent", chip_queued: "Opened in email", chip_rejected: "Not a pothole",
+    size_small: "small", size_medium: "medium", size_large: "large",
+    verdict_detected: "{size} pothole detected ({pct}% confident)",
+    verdict_rejected: "No pothole confirmed",
+    verdict_sent: "Complaint sent",
+    verdict_queued: "Opened in your email app. Edit and resend if you didn't send it.",
+    confidence: "confidence",
+    email_subject_label: "Email subject",
+    email_body_label: "Email body (review before sending)",
+    routes_to: "Routes to:",
+    getting_location: "Getting your location...",
+    waiting_gps: "Waiting for GPS...",
+    gps_30s: "Still no GPS fix after 30 s. Check that location is on with high accuracy.",
+    gps_lost: "GPS signal lost, waiting for a fresh fix...",
+    holding: "Holding position ({checked} checked, {found} found)",
+    scanning: "Scanning ({mode})... {checked} checked{analyzing}",
+    analyzing_suffix: ", {n} analyzing",
+    potholes_one: "{n} pothole", potholes_many: "{n} potholes",
+    drive_tip: "Mount the phone facing the road. Frames are checked continuously while you move (about every 10 meters). The back button also stops the drive.",
+    drive_end: "Drive ended: {found} found, {checked} frames checked.",
+    drive_end_zero: "No potholes found in this drive ({checked} frames checked{debug}).",
+    debug_saved_suffix: ", debug frames saved for review",
+    confirm_send: "Open your email app with the complaint addressed to {to}?",
+    confirm_delete: "Delete this report?",
+    confirm_wipe: "Delete ALL reports and their photos from this phone?",
+    group_header: "&#128663; Drive &middot; {date} &middot; {frames} frames, {found} found",
+    camera_failed: "Camera access failed: ",
+    drive_stopped: "Drive mode stopped: ",
+    the_officer: "the concerned officer",
+  },
+  kn: {
+    sub: "ಫೋಟೋ ತೆಗೆಯಿರಿ. ಪರಿಶೀಲಿಸಿ. ಪಾಲಿಕೆಗೆ ವರದಿ ಮಾಡಿ.",
+    report_btn: "&#128247; &nbsp;ರಸ್ತೆ ಗುಂಡಿ ವರದಿ ಮಾಡಿ",
+    drive_btn: "&#128663; &nbsp;ಡ್ರೈವ್ ಮೋಡ್",
+    your_reports: "ನಿಮ್ಮ ವರದಿಗಳು",
+    no_reports: "ಇನ್ನೂ ವರದಿಗಳಿಲ್ಲ. ಗುಂಡಿ ಹುಡುಕಲು ಹೊರಡಿ.",
+    banner_setup: "ಸೆಟಪ್ ಅಗತ್ಯ: ಗಿಯರ್ ಐಕಾನ್ ಒತ್ತಿ ನಿಮ್ಮ OpenAI API ಕೀ ಅಂಟಿಸಿ.",
+    settings_title: "ಸೆಟ್ಟಿಂಗ್ಸ್",
+    lang_label: "Language / ಭಾಷೆ",
+    key_label: "OpenAI API ಕೀ (ಈ ಸಾಧನದಲ್ಲಿ ಮಾತ್ರ ಸಂಗ್ರಹ)",
+    name_label: "ನಿಮ್ಮ ಹೆಸರು (ದೂರುಗಳಿಗೆ ಸಹಿ)",
+    debug_label: "ಡೀಬಗ್ ಮೋಡ್: ಪ್ರತಿ ಡ್ರೈವ್ ಫ್ರೇಮ್ ಅನ್ನು ಪರಿಶೀಲನೆಗೆ ಉಳಿಸಿ",
+    settings_note: "ದೂರುಗಳು ಯಾವಾಗಲೂ ಸಂಬಂಧಿತ ಪಾಲಿಕೆ ಅಧಿಕಾರಿಗೆ ಉದ್ದೇಶಿಸಿದ ಇಮೇಲ್ ಡ್ರಾಫ್ಟ್ ಆಗಿ ರಚನೆಯಾಗುತ್ತವೆ. ನಿಮ್ಮ ಇಮೇಲ್ ಆ್ಯಪ್‌ನಲ್ಲಿ ನೀವು ಕಳುಹಿಸುವವರೆಗೆ ಏನೂ ಕಳುಹಿಸಲಾಗುವುದಿಲ್ಲ.",
+    wipe_btn: "ಎಲ್ಲಾ ವರದಿ ಮತ್ತು ಫೋಟೋಗಳನ್ನು ಅಳಿಸಿ",
+    welcome_hint: "ಸ್ವಾಗತ. ಗುಂಡಿ ಪತ್ತೆಗೆ ನಿಮ್ಮ OpenAI API ಕೀ ಅಂಟಿಸಿ. ಇದು ಈ ಸಾಧನದಲ್ಲಿ ಮಾತ್ರ ಸಂಗ್ರಹವಾಗುತ್ತದೆ.",
+    back: "ಹಿಂದೆ", save: "ಉಳಿಸಿ", discard: "ತ್ಯಜಿಸಿ", del: "ಅಳಿಸಿ", email_btn: "ಇಮೇಲ್", stop: "&#9632; ನಿಲ್ಲಿಸಿ", working: "ನಡೆಯುತ್ತಿದೆ...",
+    chip_draft: "ಡ್ರಾಫ್ಟ್", chip_sent: "ಕಳುಹಿಸಲಾಗಿದೆ", chip_queued: "ಇಮೇಲ್‌ನಲ್ಲಿ ತೆರೆಯಲಾಗಿದೆ", chip_rejected: "ಗುಂಡಿ ಅಲ್ಲ",
+    size_small: "ಸಣ್ಣ", size_medium: "ಮಧ್ಯಮ", size_large: "ದೊಡ್ಡ",
+    verdict_detected: "{size} ಗುಂಡಿ ಪತ್ತೆಯಾಗಿದೆ ({pct}% ವಿಶ್ವಾಸ)",
+    verdict_rejected: "ಗುಂಡಿ ದೃಢಪಟ್ಟಿಲ್ಲ",
+    verdict_sent: "ದೂರು ಕಳುಹಿಸಲಾಗಿದೆ",
+    verdict_queued: "ನಿಮ್ಮ ಇಮೇಲ್ ಆ್ಯಪ್‌ನಲ್ಲಿ ತೆರೆಯಲಾಗಿದೆ. ಕಳುಹಿಸಿಲ್ಲದಿದ್ದರೆ ತಿದ್ದಿ ಮತ್ತೆ ತೆರೆಯಿರಿ.",
+    confidence: "ವಿಶ್ವಾಸ",
+    email_subject_label: "ಇಮೇಲ್ ವಿಷಯ",
+    email_body_label: "ಇಮೇಲ್ ಪಠ್ಯ (ಕಳುಹಿಸುವ ಮೊದಲು ಪರಿಶೀಲಿಸಿ)",
+    routes_to: "ಯಾರಿಗೆ:",
+    getting_location: "ನಿಮ್ಮ ಸ್ಥಳ ಪಡೆಯಲಾಗುತ್ತಿದೆ...",
+    waiting_gps: "GPS ಗಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ...",
+    gps_30s: "30 ಸೆಕೆಂಡ್ ನಂತರವೂ GPS ಸಿಕ್ಕಿಲ್ಲ. ಲೊಕೇಶನ್ ಆನ್ ಇದೆಯೇ ಪರಿಶೀಲಿಸಿ.",
+    gps_lost: "GPS ಸಿಗ್ನಲ್ ಕಳೆದುಹೋಗಿದೆ, ಹೊಸ ಫಿಕ್ಸ್‌ಗಾಗಿ ಕಾಯಲಾಗುತ್ತಿದೆ...",
+    holding: "ಸ್ಥಳದಲ್ಲಿದ್ದೀರಿ ({checked} ಪರಿಶೀಲನೆ, {found} ಪತ್ತೆ)",
+    scanning: "ಸ್ಕ್ಯಾನ್ ({mode})... {checked} ಪರಿಶೀಲನೆ{analyzing}",
+    analyzing_suffix: ", {n} ವಿಶ್ಲೇಷಣೆ",
+    potholes_one: "{n} ಗುಂಡಿ", potholes_many: "{n} ಗುಂಡಿಗಳು",
+    drive_tip: "ಫೋನ್ ಅನ್ನು ರಸ್ತೆಗೆ ಮುಖ ಮಾಡಿ ಇರಿಸಿ. ನೀವು ಚಲಿಸುವಾಗ ಫ್ರೇಮ್‌ಗಳನ್ನು ನಿರಂತರವಾಗಿ ಪರಿಶೀಲಿಸಲಾಗುತ್ತದೆ (ಸುಮಾರು ಪ್ರತಿ 10 ಮೀಟರ್). ಬ್ಯಾಕ್ ಬಟನ್ ಡ್ರೈವ್ ಅನ್ನೂ ನಿಲ್ಲಿಸುತ್ತದೆ.",
+    drive_end: "ಡ್ರೈವ್ ಮುಗಿಯಿತು: {found} ಪತ್ತೆ, {checked} ಫ್ರೇಮ್ ಪರಿಶೀಲನೆ.",
+    drive_end_zero: "ಈ ಡ್ರೈವ್‌ನಲ್ಲಿ ಗುಂಡಿ ಪತ್ತೆಯಾಗಿಲ್ಲ ({checked} ಫ್ರೇಮ್ ಪರಿಶೀಲನೆ{debug}).",
+    debug_saved_suffix: ", ಡೀಬಗ್ ಫ್ರೇಮ್‌ಗಳು ಉಳಿದಿವೆ",
+    confirm_send: "{to} ಗೆ ಉದ್ದೇಶಿಸಿದ ದೂರಿನೊಂದಿಗೆ ನಿಮ್ಮ ಇಮೇಲ್ ಆ್ಯಪ್ ತೆರೆಯಬೇಕೆ?",
+    confirm_delete: "ಈ ವರದಿ ಅಳಿಸಬೇಕೆ?",
+    confirm_wipe: "ಈ ಫೋನ್‌ನಿಂದ ಎಲ್ಲಾ ವರದಿ ಮತ್ತು ಫೋಟೋ ಅಳಿಸಬೇಕೆ?",
+    group_header: "&#128663; ಡ್ರೈವ್ &middot; {date} &middot; {frames} ಫ್ರೇಮ್, {found} ಪತ್ತೆ",
+    camera_failed: "ಕ್ಯಾಮೆರಾ ಪ್ರವೇಶ ವಿಫಲ: ",
+    drive_stopped: "ಡ್ರೈವ್ ಮೋಡ್ ನಿಂತಿದೆ: ",
+    the_officer: "ಸಂಬಂಧಿತ ಅಧಿಕಾರಿ",
+  },
+};
+const LANG = localStorage.getItem("app_lang") === "kn" ? "kn" : "en";
+const t = (k, p) => {
+  let s = (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k;
+  if (p) for (const [key, val] of Object.entries(p)) s = s.split("{" + key + "}").join(val);
+  return s;
+};
+const tSize = (s) => (s ? t("size_" + s) : "");
 let health = { ai_configured: true, email_configured: false, delivery: "gmail_draft" };
 
 function show(screen) {
@@ -115,11 +224,28 @@ function show(screen) {
 
 function fmtDate(ts) { return new Date(ts * 1000).toLocaleString([], {day:"numeric", month:"short", hour:"2-digit", minute:"2-digit"}); }
 
-const sendLabel = () => "Email";
+const sendLabel = () => t("email_btn");
 
 function chip(status) {
-  const label = { draft: "Draft", sent: "Sent", queued: "Opened in email", rejected: "Not a pothole" }[status] || status;
+  const label = { draft: t("chip_draft"), sent: t("chip_sent"), queued: t("chip_queued"), rejected: t("chip_rejected") }[status] || status;
   return `<span class="chip ${status}">${label}</span>`;
+}
+
+function applyLang() {
+  $("subTitle").textContent = t("sub");
+  $("captureBtn").innerHTML = t("report_btn");
+  $("driveBtn").innerHTML = t("drive_btn");
+  $("reportsTitle").textContent = t("your_reports");
+  $("settingsTitle").textContent = t("settings_title");
+  $("keyLabel").textContent = t("key_label");
+  $("nameLabel").textContent = t("name_label");
+  $("debugLabel").textContent = t("debug_label");
+  $("settingsNote").textContent = t("settings_note");
+  $("wipeBtn").textContent = t("wipe_btn");
+  $("setBack").textContent = t("back");
+  $("setSave").textContent = t("save");
+  $("driveTip").textContent = t("drive_tip");
+  $("driveStop").innerHTML = t("stop");
 }
 
 async function api(path, opts) {
@@ -131,7 +257,7 @@ async function loadHealth() {
     health = await api("/api/health");
     const b = $("banner");
     if (!health.ai_configured) {
-      b.textContent = "Setup needed: tap the gear icon and paste your OpenAI API key.";
+      b.textContent = t("banner_setup");
       b.style.display = "block";
     } else { b.style.display = "none"; }
   } catch (e) {}
@@ -141,12 +267,12 @@ async function loadReports() {
   const reports = await api("/api/reports");
   loadReports.latest = reports;
   const list = $("list");
-  if (!reports.length) { list.innerHTML = '<div class="empty">No reports yet. Go find a pothole.</div>'; return; }
+  if (!reports.length) { list.innerHTML = `<div class="empty">${t("no_reports")}</div>`; return; }
   const cardHtml = (r) => `
     <div class="card row" data-id="${r.id}" style="cursor:pointer">
       <img class="thumb" src="${r.photo_url}" alt="">
       <div style="min-width:0">
-        <div>${chip(r.status)} ${r.size ? `<span class="chip" style="background:#26272c;color:#cfcfd4">${r.size}</span>` : ""}</div>
+        <div>${chip(r.status)} ${r.size ? `<span class="chip" style="background:#26272c;color:#cfcfd4">${tSize(r.size)}</span>` : ""}</div>
         <div class="meta">${fmtDate(r.created_at)}${r.address ? " &middot; " + r.address.split(",").slice(0, 2).join(", ") : ""}</div>
       </div>
     </div>`;
@@ -162,7 +288,7 @@ async function loadReports() {
     if (!g.driveId) return cards;
     const found = g.items.filter((x) => x.status === "draft" || x.status === "queued" || x.status === "sent").length;
     const start = g.items[g.items.length - 1].created_at;
-    return `<div class="meta" style="margin:16px 0 6px;font-weight:600">&#128663; Drive &middot; ${fmtDate(start)} &middot; ${g.items.length} ${g.items.length === 1 ? "frame" : "frames"}, ${found} ${found === 1 ? "pothole" : "potholes"}</div>` + cards;
+    return `<div class="meta" style="margin:16px 0 6px;font-weight:600">${t("group_header", { date: fmtDate(start), frames: g.items.length, found })}</div>` + cards;
   }).join("");
   for (const el of list.querySelectorAll("[data-id]")) {
     el.onclick = () => openDetail(reports.find(r => r.id == el.dataset.id));
@@ -183,10 +309,10 @@ function getPosition() {
 async function handleFile(file) {
   if (!file) return;
   $("progressPhoto").src = URL.createObjectURL(file);
-  $("progressText").textContent = "Getting your location...";
+  $("progressText").textContent = t("getting_location");
   show("progress");
   const pos = await getPosition();
-  $("progressText").textContent = "Checking the photo for potholes...";
+  $("progressText").textContent = t("working");
   const fd = new FormData();
   fd.append("photo", file);
   if (pos) { fd.append("lat", pos.lat); fd.append("lng", pos.lng); }
@@ -206,21 +332,21 @@ function openDetail(r) {
     d.innerHTML = `
       <div class="card">
         <img class="big-photo" src="${r.photo_url}" alt="">
-        <div class="verdict" style="color:var(--bad)">No pothole confirmed</div>
-        <div class="meta">${r.description || ""} (confidence ${(r.confidence * 100).toFixed(0)}%${r.is_pothole ? "" : ", not classified as a pothole"})</div>
+        <div class="verdict" style="color:var(--bad)">${t("verdict_rejected")}</div>
+        <div class="meta">${r.description || ""} (${t("confidence")} ${(r.confidence * 100).toFixed(0)}%)</div>
         <div class="btn-row">
-          <button class="ghost" id="backBtn">Back</button>
-          <button class="ghost danger" id="discardBtn">Delete</button>
+          <button class="ghost" id="backBtn">${t("back")}</button>
+          <button class="ghost danger" id="discardBtn">${t("del")}</button>
         </div>
       </div>`;
   } else {
     // "queued" stays editable and reopenable: the user may have canceled the
     // email composer and must not be stranded.
     const sent = r.status === "sent";
-    const verdictText = r.status === "sent" ? "Complaint sent"
+    const verdictText = r.status === "sent" ? t("verdict_sent")
       : r.status === "queued"
-      ? "Opened in your email app. Edit and resend if you didn't send it."
-      : `${(r.size || "").toUpperCase()} pothole detected (${(r.confidence * 100).toFixed(0)}% confident)`;
+      ? t("verdict_queued")
+      : t("verdict_detected", { size: tSize(r.size).toUpperCase(), pct: (r.confidence * 100).toFixed(0) });
     d.innerHTML = `
       <div class="card">
         <img class="big-photo" src="${r.photo_url}" alt="">
@@ -228,15 +354,15 @@ function openDetail(r) {
           ${verdictText}
         </div>
         ${r.address ? `<div class="meta">&#128205; ${r.address}</div>` : ""}
-        ${r.officer_name ? `<div class="meta">&#128231; Routes to: ${r.officer_name}</div>` : ""}
+        ${r.officer_name ? `<div class="meta">&#128231; ${t("routes_to")} ${r.officer_name}</div>` : ""}
         ${r.tender_note ? `<div class="meta">&#128209; ${r.tender_note}</div>` : ""}
-        <label>Email subject</label>
+        <label>${t("email_subject_label")}</label>
         <input type="text" id="subj" value="" ${sent ? "disabled" : ""}>
-        <label>Email body (review before sending)</label>
+        <label>${t("email_body_label")}</label>
         <textarea id="body" ${sent ? "disabled" : ""}></textarea>
         <div class="btn-row">
-          <button class="ghost" id="backBtn">Back</button>
-          ${sent ? "" : `<button class="ghost danger" id="discardBtn">Discard</button>
+          <button class="ghost" id="backBtn">${t("back")}</button>
+          ${sent ? "" : `<button class="ghost danger" id="discardBtn">${t("discard")}</button>
           <button class="send" id="sendBtn">${sendLabel()} &#9993;</button>`}
         </div>
       </div>`;
@@ -247,7 +373,7 @@ function openDetail(r) {
   $("backBtn").onclick = () => { show("home"); loadReports(); };
   const discard = $("discardBtn");
   if (discard) discard.onclick = async () => {
-    if (!confirm("Delete this report?")) return;
+    if (!confirm(t("confirm_delete"))) return;
     try { await api(`/api/reports/${r.id}`, { method: "DELETE" }); } catch (e) { alert(e.message); return; }
     await loadReports(); show("home");
   };
@@ -256,10 +382,10 @@ function openDetail(r) {
 
 async function sendReport(r) {
   // The draft is always addressed to the routed officer; nothing ever auto-sends.
-  const to = r.officer_email || "the concerned officer";
-  if (!confirm(`Open your email app with the complaint addressed to ${to}?`)) return;
+  const to = r.officer_email || t("the_officer");
+  if (!confirm(t("confirm_send", { to }))) return;
   const btn = $("sendBtn");
-  btn.disabled = true; btn.textContent = "Working...";
+  btn.disabled = true; btn.textContent = t("working");
   try {
     await api(`/api/reports/${r.id}`, {
       method: "PATCH",
@@ -302,7 +428,7 @@ async function startDrive() {
       video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 } },
       audio: false,
     });
-  } catch (e) { driveStarting = false; alert("Camera access failed: " + e.message); return; }
+  } catch (e) { driveStarting = false; alert(t("camera_failed") + e.message); return; }
   $("driveVideo").srcObject = stream;
   drive = { stream, pos: null, lastCapPos: null, checked: 0, found: 0, inFlight: 0, errors: 0, wakeLock: null, foundSpots: [], sessionId: String(Date.now()), startedAt: Date.now(), imageCapture: null, stillFailed: false, stillBusy: false };
   try {
@@ -315,17 +441,17 @@ async function startDrive() {
     { enableHighAccuracy: true, maximumAge: 2000 }
   );
   drive.timer = setInterval(driveTick, FRAME_INTERVAL_MS);
-  updateHud("Waiting for GPS...");
+  updateHud(t("waiting_gps"));
   show("drive");
   driveStarting = false;
 }
 
 function updateHud(status) {
   if (!drive) return;
-  $("driveCount").textContent = `${drive.found} ${drive.found === 1 ? "pothole" : "potholes"}`;
+  $("driveCount").textContent = drive.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: drive.found });
   const mode = drive.imageCapture && !drive.stillFailed ? "stills" : "preview";
   $("driveStatus").textContent = status ||
-    `Scanning (${mode})... ${drive.checked} checked${drive.inFlight ? `, ${drive.inFlight} analyzing` : ""}`;
+    t("scanning", { mode, checked: drive.checked, analyzing: drive.inFlight ? t("analyzing_suffix", { n: drive.inFlight }) : "" });
 }
 
 const withTimeout = (p, ms) =>
@@ -390,17 +516,15 @@ async function driveTick() {
   const gpsFresh = drive.pos && Date.now() - (drive.posAt || 0) <= GPS_MAX_AGE_MS;
   if (!gpsFresh) {
     updateHud(!drive.pos
-      ? (Date.now() - drive.startedAt > 30000
-        ? "Still no GPS fix after 30 s. Check that location is on with high accuracy."
-        : "Waiting for GPS...")
-      : "GPS signal lost, waiting for a fresh fix...");
+      ? (Date.now() - drive.startedAt > 30000 ? t("gps_30s") : t("waiting_gps"))
+      : t("gps_lost"));
     return;
   }
   if (drive.inFlight >= MAX_IN_FLIGHT) { updateHud(); return; }
   const pos = { ...drive.pos };
   const sinceLastCapture = Date.now() - (drive.lastCapAt || 0);
   if (drive.lastCapPos && distMeters(drive.lastCapPos, pos) < MIN_MOVE_METERS && sinceLastCapture < STILL_CAPTURE_MS) {
-    updateHud(`Holding position (${drive.checked} checked, ${drive.found} found)`);
+    updateHud(t("holding", { checked: drive.checked, found: drive.found }));
     return;
   }
   for (const s of drive.foundSpots) {
@@ -432,7 +556,7 @@ async function driveTick() {
       if (!drive) return;
       drive.errors++;
       updateHud(e.message);
-      if (drive.errors >= 5) { const msg = e.message; stopDrive(); alert("Drive mode stopped: " + msg); }
+      if (drive.errors >= 5) { const msg = e.message; stopDrive(); alert(t("drive_stopped") + msg); }
     })
     .finally(() => { if (drive) { drive.inFlight--; updateHud(); } });
 }
@@ -440,8 +564,8 @@ async function driveTick() {
 function stopDrive() {
   if (!drive) return;
   const summary = drive.found === 0
-    ? `No potholes found in this drive (${drive.checked} frames checked${localStorage.getItem("debug_mode") === "1" ? ", debug frames saved for review" : ""}).`
-    : `Drive ended: ${drive.found} ${drive.found === 1 ? "pothole" : "potholes"} found, ${drive.checked} frames checked.`;
+    ? t("drive_end_zero", { checked: drive.checked, debug: localStorage.getItem("debug_mode") === "1" ? t("debug_saved_suffix") : "" })
+    : t("drive_end", { found: drive.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: drive.found }), checked: drive.checked });
   const hadActivity = drive.checked > 0 || drive.found > 0 || drive.inFlight > 0;
   clearInterval(drive.timer);
   navigator.geolocation.clearWatch(drive.watchId);
@@ -500,9 +624,8 @@ window.openSettings = (firstRun) => {
   $("setKey").value = localStorage.getItem("openai_key") || "";
   $("setName").value = localStorage.getItem("sender_name") || "";
   $("setDebug").checked = localStorage.getItem("debug_mode") === "1";
-  $("settingsHint").textContent = firstRun
-    ? "Welcome. Paste your OpenAI API key to enable pothole detection. It is stored only on this device."
-    : "";
+  $("setLang").value = LANG;
+  $("settingsHint").textContent = firstRun ? t("welcome_hint") : "";
   show("settings");
 };
 $("gearBtn").onclick = () => openSettings(false);
@@ -511,16 +634,21 @@ $("setSave").onclick = async () => {
   localStorage.setItem("openai_key", $("setKey").value.trim());
   localStorage.setItem("sender_name", $("setName").value.trim());
   localStorage.setItem("debug_mode", $("setDebug").checked ? "1" : "0");
+  const newLang = $("setLang").value;
+  localStorage.setItem("app_lang", newLang);
+  if (newLang !== LANG) { location.reload(); return; }
   await loadHealth();
   await loadReports();
   show("home");
 };
 $("wipeBtn").onclick = async () => {
-  if (!confirm("Delete ALL reports and their photos from this phone?")) return;
+  if (!confirm(t("confirm_wipe"))) return;
   try { await api("/api/reports", { method: "DELETE" }); } catch (e) { alert(e.message); return; }
   await loadReports();
   show("home");
 };
+
+applyLang();
 
 // #report-<id> deep link opens that report's detail screen directly.
 (async () => {

@@ -15,6 +15,17 @@
     get debug() { return localStorage.getItem("debug_mode") === "1"; },
   };
 
+  const LANG = () => (localStorage.getItem("app_lang") === "kn" ? "kn" : "en");
+  const PROGRESS = {
+    en: { compress: "Compressing photo...", capture: "Capturing frame...", screen: "Quick road scan...",
+          detect: "AI checking for potholes...", finalize: "Finalizing address and contract...",
+          write: "Writing the complaint...", email: "Opening your email app..." },
+    kn: { compress: "ಫೋಟೋ ಸಂಕುಚಿಸಲಾಗುತ್ತಿದೆ...", capture: "ಫ್ರೇಮ್ ಸೆರೆಹಿಡಿಯಲಾಗುತ್ತಿದೆ...", screen: "ತ್ವರಿತ ರಸ್ತೆ ಪರಿಶೀಲನೆ...",
+          detect: "AI ಗುಂಡಿ ಪರಿಶೀಲಿಸುತ್ತಿದೆ...", finalize: "ವಿಳಾಸ ಮತ್ತು ಗುತ್ತಿಗೆ ಖಚಿತಪಡಿಸಲಾಗುತ್ತಿದೆ...",
+          write: "ದೂರು ಬರೆಯಲಾಗುತ್ತಿದೆ...", email: "ನಿಮ್ಮ ಇಮೇಲ್ ಆ್ಯಪ್ ತೆರೆಯಲಾಗುತ್ತಿದೆ..." },
+  };
+  const pmsg = (k) => (PROGRESS[LANG()] && PROGRESS[LANG()][k]) || PROGRESS.en[k];
+
   const MODEL = "gpt-5-mini";
   const SCREEN_MODEL = "gpt-5-nano";
   const MIN_CONFIDENCE = 0.5;
@@ -187,35 +198,61 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     if (!m || m.match_index === null || m.match_index < 0 || m.match_index >= candidates.length || m.confidence < 0.6) return null;
     const t = candidates[m.match_index];
     let warranty = "on record for this stretch";
+    let warranty_code = "record";
     const dm = /^(\d{2})-(\d{2})-(\d{4})/.exec(t.d);
     if (dm) {
       const ageYears = (Date.now() - new Date(`${dm[3]}-${dm[2]}-${dm[1]}`).getTime()) / (365.25 * 24 * 3600 * 1000);
-      if (ageYears <= 1) warranty = "likely still within the defect liability period";
-      else if (ageYears <= 3) warranty = "possibly still within the maintenance period";
+      if (ageYears <= 1) { warranty = "likely still within the defect liability period"; warranty_code = "dlp"; }
+      else if (ageYears <= 3) { warranty = "possibly still within the maintenance period"; warranty_code = "maint"; }
     }
     const contractor = t.c || "contractor not named in the award record";
     return {
-      tender_number: t.tn, contractor, title: t.t, published: t.d, warranty,
+      tender_number: t.tn, contractor, title: t.t, published: t.d, warranty, warranty_code,
       note: `Probable contract: ${t.tn}, ${contractor}, awarded ${t.d}`,
     };
   }
 
-  // ---------- drafting ----------
+  // ---------- drafting (English / Kannada) ----------
   function draftEmail(a, lat, lng, address, officerName, tender) {
-    const where = address || "location attached below";
+    const kn = LANG() === "kn";
+    const sizeName = (s) => (kn ? ({ small: "ಸಣ್ಣ", medium: "ಮಧ್ಯಮ", large: "ದೊಡ್ಡ" })[s] || s : s);
+    const size = a.size ? sizeName(a.size) : (kn ? "ಗಾತ್ರ ನಿರ್ಧರಿಸದ" : "unclassified");
+    const road = address ? address.split(",")[0].trim() : null;
     let locLines;
     if (lat != null) {
-      locLines = `Location: ${where}\nCoordinates: ${lat.toFixed(6)}, ${lng.toFixed(6)}\nMap link: https://maps.google.com/?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
+      const la = lat.toFixed(6), ln = lng.toFixed(6);
+      locLines = kn
+        ? `ಸ್ಥಳ: ${address || "ಕೆಳಗಿನ ನಿರ್ದೇಶಾಂಕ ನೋಡಿ"}\nನಿರ್ದೇಶಾಂಕಗಳು: ${la}, ${ln}\nನಕ್ಷೆ ಲಿಂಕ್: https://maps.google.com/?q=${la},${ln}`
+        : `Location: ${address || "location attached below"}\nCoordinates: ${la}, ${ln}\nMap link: https://maps.google.com/?q=${la},${ln}`;
     } else {
-      locLines = "Location: could not be determined automatically. Please see the attached photo for landmarks.";
+      locLines = kn
+        ? "ಸ್ಥಳ: ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನಿರ್ಧರಿಸಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಲಗತ್ತಿಸಿದ ಫೋಟೋ ನೋಡಿ."
+        : "Location: could not be determined automatically. Please see the attached photo for landmarks.";
     }
-    const subject = `Pothole complaint: ${a.size || "unclassified"} pothole` + (address ? ` near ${address.split(",")[0]}` : "");
-    let body = `Dear ${officerName || "Sir or Madam"},
+    const subject = kn
+      ? `ರಸ್ತೆ ಗುಂಡಿ ದೂರು: ${size} ಗುಂಡಿ` + (road ? ` (${road})` : "")
+      : `Pothole complaint: ${size} pothole` + (road ? ` near ${road}` : "");
+    let body = kn
+      ? `ಮಾನ್ಯ ${officerName || "ಅಧಿಕಾರಿಗಳೇ"} ಅವರಿಗೆ,
+
+ತುರ್ತು ದುರಸ್ತಿ ಅಗತ್ಯವಿರುವ ರಸ್ತೆ ಗುಂಡಿಯ ಬಗ್ಗೆ ದೂರು ಸಲ್ಲಿಸುತ್ತಿದ್ದೇನೆ.
+
+${locLines}
+ಅಂದಾಜು ಗಾತ್ರ: ${size}
+ವಿವರ: ${a.description}
+
+ಗುಂಡಿಯ ಛಾಯಾಚಿತ್ರವನ್ನು ಈ ಇಮೇಲ್‌ಗೆ ಲಗತ್ತಿಸಲಾಗಿದೆ. ಈ ಗುಂಡಿ ದ್ವಿಚಕ್ರ ವಾಹನ ಸವಾರರಿಗೆ ಮತ್ತು ಇತರ ರಸ್ತೆ ಬಳಕೆದಾರರಿಗೆ ಅಪಾಯಕಾರಿ. ಇದನ್ನು ಶೀಘ್ರ ಪರಿಶೀಲಿಸಿ ದುರಸ್ತಿ ಮಾಡಬೇಕೆಂದು, ಮತ್ತು ಈ ರಸ್ತೆ ನಿರ್ವಹಣಾ ವಾರಂಟಿ ಅಡಿಯಲ್ಲಿದ್ದರೆ ಸಂಬಂಧಿತ ಗುತ್ತಿಗೆದಾರರಿಂದ ದುರಸ್ತಿ ಮಾಡಿಸಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ. ಈ ದೂರನ್ನು ಸಹಾಯ (Sahaaya) ವೇದಿಕೆಯಲ್ಲಿಯೂ ದಾಖಲಿಸುತ್ತೇನೆ.
+
+ನಗರ ಸೇವೆಗೆ ಧನ್ಯವಾದಗಳು.
+
+ವಂದನೆಗಳು,
+${S.name}`
+      : `Dear ${officerName || "Sir or Madam"},
 
 I would like to report a pothole that needs urgent repair.
 
 ${locLines}
-Approximate size: ${a.size || "not classified"}
+Approximate size: ${size}
 Details: ${a.description}
 
 A photograph of the pothole is attached to this email. This pothole poses a danger to two wheeler riders and other road users. I request the city corporation to inspect and repair it at the earliest, and to route it to the contractor responsible if this road section is still under a maintenance warranty. I am also filing this grievance on Sahaaya so it can be tracked to resolution.
@@ -225,8 +262,13 @@ Thank you for your service to the city.
 Regards,
 ${S.name}`;
     if (tender) {
-      const para = `Public procurement records indicate this road stretch probably falls under tender ${tender.tender_number} ("${tender.title.slice(0, 140).trim()}"), awarded on ${tender.published} to ${tender.contractor}, and is ${tender.warranty}. If the defect liability or maintenance period is in force, I request that the repair be carried out by the contractor at no additional cost to the corporation. This is a probable record match; kindly verify against the tender documents.`;
-      body = body.replace("\n\nThank you", `\n\n${para}\n\nThank you`);
+      const warrantyKn = ({ dlp: "ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅವಧಿಯಲ್ಲಿ ಇನ್ನೂ ಇರುವ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು", maint: "ನಿರ್ವಹಣಾ ಅವಧಿಯಲ್ಲಿ ಇನ್ನೂ ಇರುವ ಸಾಧ್ಯತೆ ಇದೆ", record: "ಈ ಭಾಗದ ದಾಖಲೆಯಲ್ಲಿದೆ" })[tender.warranty_code || "record"];
+      const para = kn
+        ? `ಸಾರ್ವಜನಿಕ ಖರೀದಿ ದಾಖಲೆಗಳ ಪ್ರಕಾರ ಈ ರಸ್ತೆ ಭಾಗ ಟೆಂಡರ್ ${tender.tender_number} ("${tender.title.slice(0, 140).trim()}") ಅಡಿಯಲ್ಲಿ ಬರುವ ಸಾಧ್ಯತೆ ಇದೆ. ಇದನ್ನು ${tender.published} ರಂದು ${tender.contractor} ಅವರಿಗೆ ನೀಡಲಾಗಿದ್ದು, ${warrantyKn}. ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅಥವಾ ನಿರ್ವಹಣಾ ಅವಧಿ ಜಾರಿಯಲ್ಲಿದ್ದರೆ, ಪಾಲಿಕೆಗೆ ಹೆಚ್ಚುವರಿ ವೆಚ್ಚವಿಲ್ಲದೆ ಗುತ್ತಿಗೆದಾರರಿಂದಲೇ ದುರಸ್ತಿ ಮಾಡಿಸಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ. ಇದು ಸಂಭಾವ್ಯ ದಾಖಲೆ ಹೊಂದಾಣಿಕೆ; ದಯವಿಟ್ಟು ಟೆಂಡರ್ ದಾಖಲೆಗಳೊಂದಿಗೆ ಪರಿಶೀಲಿಸಿ.`
+        : `Public procurement records indicate this road stretch probably falls under tender ${tender.tender_number} ("${tender.title.slice(0, 140).trim()}"), awarded on ${tender.published} to ${tender.contractor}, and is ${tender.warranty}. If the defect liability or maintenance period is in force, I request that the repair be carried out by the contractor at no additional cost to the corporation. This is a probable record match; kindly verify against the tender documents.`;
+      body = kn
+        ? body.replace("\n\nನಗರ ಸೇವೆಗೆ", `\n\n${para}\n\nನಗರ ಸೇವೆಗೆ`)
+        : body.replace("\n\nThank you", `\n\n${para}\n\nThank you`);
     }
     return [subject, body];
   }
@@ -288,35 +330,38 @@ ${S.name}`;
       }
     }
 
-    progress(driveMode ? "Capturing frame..." : "Compressing photo...");
+    progress(driveMode ? pmsg("capture") : pmsg("compress"));
     const dataUrl = await toDataUrl(photo, driveMode ? 1280 : 2000);
     // Geocoding runs in parallel with the AI calls; it never gates detection.
     const geoP = lat != null ? reverseGeocode(lat, lng).catch(() => null) : Promise.resolve(null);
     if (driveMode) {
-      progress("Quick road scan...");
+      progress(pmsg("screen"));
       const s = await analyzeImage(dataUrl, SCREEN_PROMPT, "screen", SCREEN_SCHEMA, SCREEN_MODEL);
       if (!s.possible_pothole) {
         if (S.debug) await saveDebugFrame(dataUrl, lat, lng, "Debug frame: screened out by the quick road scan.", 0, driveId);
         return { found: false };
       }
     }
-    progress("AI checking for potholes...");
+    progress(pmsg("detect"));
     // Contract adjudication runs speculatively in parallel with confirmation:
     // total wait becomes the max of the two instead of their sum. The rare
     // waste is one cheap text call when a screened frame ends up rejected.
     const tenderP = geoP.then((addr) => matchTender(addr)).catch(() => null);
-    const a = await analyzeImage(dataUrl, DETECT_PROMPT, "assessment", ASSESS_SCHEMA, MODEL);
+    const detectPrompt = DETECT_PROMPT + (LANG() === "kn"
+      ? "\n- Write the description field in formal Kannada (ಕನ್ನಡ ಭಾಷೆಯಲ್ಲಿ ಬರೆಯಿರಿ)."
+      : "");
+    const a = await analyzeImage(dataUrl, detectPrompt, "assessment", ASSESS_SCHEMA, MODEL);
     const accepted = a.is_pothole && a.confidence >= MIN_CONFIDENCE;
     if (driveMode && !accepted) {
       if (S.debug) await saveDebugFrame(dataUrl, lat, lng, `Debug frame: analyzed, no pothole confirmed (${Math.round(a.confidence * 100)}%). ${a.description}`, a.confidence, driveId);
       return { found: false };
     }
 
-    if (accepted) progress("Finalizing address and contract...");
+    if (accepted) progress(pmsg("finalize"));
     const address = accepted ? await geoP : null;
     const [officerName, officerEmail] = accepted ? routeOfficer(address) : [null, null];
     const tender = accepted ? await tenderP : null;
-    if (accepted) progress("Writing the complaint...");
+    if (accepted) progress(pmsg("write"));
     const [subject, body] = accepted ? draftEmail(a, lat, lng, address, officerName, tender) : [null, null];
 
     const rec = {
@@ -350,7 +395,7 @@ ${S.name}`;
   async function openInGmail(rec) {
     // Always the routed officer. The app never sends; the user does, in their email app.
     const to = rec.officer_email || HQ[1];
-    progress("Opening your email app...");
+    progress(pmsg("email"));
     if (NATIVE) {
       // Vanilla-JS WebView: the injected runtime exposes plugins via Capacitor.Plugins
       // and has no registerPlugin. Support both for bundler compatibility.

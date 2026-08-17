@@ -19,6 +19,10 @@ No server, no backend, no credentials in the APK. The app is the product.
    your name. Both are stored only on the device.
 3. Allow camera and location when prompted.
 
+The app is bilingual: English and Kannada (ಕನ್ನಡ), switchable in Settings.
+The complaint email, including the AI-written description, is drafted in the
+selected language.
+
 Settings (gear icon) also has:
 - **Debug mode:** keep every Drive Mode frame, including screened-out and
   rejected ones, as reviewable entries with the reason each failed. Use it to
