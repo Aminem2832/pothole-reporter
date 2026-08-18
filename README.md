@@ -92,10 +92,20 @@ photo attached. You press send there. Canceling the composer leaves the
 report editable and reopenable ("Opened in email" status). Walking works the
 same as driving; there is no accelerometer involved anywhere.
 
+**Your contribution.** A dashboard on the home screen totals potholes found,
+complaints sent, frames checked, drives, kilometres of road covered (from the
+recorded GPS tracks) and footage held, breaks the finds down by size and by city
+corporation, and pins every located pothole on a map. Tapping a pin opens that
+report. Leaflet is vendored into the APK rather than loaded from a CDN, so the app
+still works offline; the map tiles do need a connection, and without one the same
+points are plotted on a plain scatter instead.
+
 **Storage.** Reports and their photos live in on-device IndexedDB and appear in
 the history list with status chips: Draft, Opened in email, Not a pothole,
 Outside coverage. Past drives collapse into a single row showing the date,
-potholes found and frames actually checked; tap to expand. Tap any photo to open
+potholes found and frames actually checked; tap to expand. Inside a drive the
+confirmed potholes sort above the frames that were checked and dismissed, so a
+drive with three finds among two hundred frames does not bury them. Tap any photo to open
 it full screen, pinch to zoom, and swipe or use the arrows to move between
 records without going back to the list.
 
@@ -163,6 +173,8 @@ affiliated with GBA, BBMP, or any government body.
 
 ## Credits
 
+- Map: [Leaflet](https://leafletjs.com) (BSD-2-Clause), vendored in
+  `static/vendor/`, with tiles from OpenStreetMap
 - Contract data: public-domain KPPP award snapshot by
   [bengaluru-road-contracts.pages.dev](https://bengaluru-road-contracts.pages.dev)
   (ultimate source: Karnataka Public Procurement Portal)

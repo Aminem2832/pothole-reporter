@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pothole Reporter</title>
+<link rel="stylesheet" href="vendor/leaflet.css">
 <meta name="theme-color" content="#111214">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -70,6 +71,7 @@
 
   <div id="home">
     <button class="primary" id="captureBtn">&#128247; &nbsp;Report a pothole</button>
+    <button class="ghost" id="dashBtn" style="width:100%;margin-bottom:14px">&#128506;&#65039; &nbsp;Your contribution</button>
     <button class="primary" id="driveBtn" style="background:#26272c;color:#f2f2f4;margin-top:-8px">&#128663; &nbsp;Drive mode</button>
     <input type="file" id="fileInput" accept="image/*" capture="environment" class="hidden">
     <h2 id="reportsTitle">Your reports</h2>
@@ -94,6 +96,20 @@
       </div>
     </div>
     <div class="meta" id="driveTip" style="text-align:center;margin-top:10px">Mount the phone facing the road. Frames are checked continuously while you move (about every 10 meters). The back button also stops the drive.</div>
+  </div>
+
+  <div id="dash" class="hidden">
+    <div class="card">
+      <div class="verdict" id="dashTitle">Your contribution</div>
+      <div class="meta" id="dashRange"></div>
+      <div id="dashStats" class="row" style="flex-wrap:wrap;gap:8px;margin-top:12px"></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="map" style="height:46vh;background:#0c0d0f"></div>
+      <div class="meta" id="mapNote" style="padding:8px 12px"></div>
+    </div>
+    <div class="card" id="dashBreak"></div>
+    <div class="btn-row"><button class="ghost" id="dashBack">Back</button></div>
   </div>
 
   <div id="review" class="hidden">
@@ -144,6 +160,7 @@
     <div id="viewerHint"></div>
   </div>
 
+<script src="vendor/leaflet.js"></script>
 <script src="standalone.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -169,6 +186,13 @@ const I18N = {
     chip_draft: "Draft", chip_sent: "Sent", chip_queued: "Opened in email", chip_rejected: "Not a pothole",
     chip_unrouted: "Outside coverage",
     review_btn: "Review and label frames", export_btn: "Export labelled dataset",
+    dash_btn: "&#128506;&#65039; &nbsp;Your contribution", dash_title: "Your contribution",
+    dash_range: "{days} days of reporting &middot; first on {first}",
+    dash_empty: "No potholes reported yet. Your map fills up as you drive.",
+    stat_found: "potholes found", stat_reported: "complaints sent", stat_frames: "frames checked",
+    stat_drives: "drives", stat_footage: "MB of footage", stat_km: "km of road covered",
+    by_size: "By size", by_area: "By corporation", map_pins: "{n} pinned",
+    map_offline: "Map tiles need a connection. Points are still plotted below.",
     zoom_hint: "Pinch to zoom &middot; drag to pan &middot; double tap to reset",
     rec_suffix: "&middot; recording {mb} MB", rec_failed: "&middot; not recording",
     footage_line: "Footage: {mb} MB &middot; {segments} clips",
@@ -237,6 +261,13 @@ const I18N = {
     chip_draft: "ಡ್ರಾಫ್ಟ್", chip_sent: "ಕಳುಹಿಸಲಾಗಿದೆ", chip_queued: "ಇಮೇಲ್‌ನಲ್ಲಿ ತೆರೆಯಲಾಗಿದೆ", chip_rejected: "ಗುಂಡಿ ಅಲ್ಲ",
     chip_unrouted: "ವ್ಯಾಪ್ತಿಯ ಹೊರಗೆ",
     review_btn: "ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಗುರುತಿಸಿ", export_btn: "ಗುರುತಿಸಿದ ಡೇಟಾಸೆಟ್ ರಫ್ತು ಮಾಡಿ",
+    dash_btn: "&#128506;&#65039; &nbsp;ನಿಮ್ಮ ಕೊಡುಗೆ", dash_title: "ನಿಮ್ಮ ಕೊಡುಗೆ",
+    dash_range: "{days} ದಿನಗಳ ವರದಿ &middot; ಮೊದಲನೆಯದು {first}",
+    dash_empty: "ಇನ್ನೂ ಗುಂಡಿಗಳ ವರದಿ ಇಲ್ಲ. ಡ್ರೈವ್ ಮಾಡಿದಂತೆ ನಕ್ಷೆ ತುಂಬುತ್ತದೆ.",
+    stat_found: "ಗುಂಡಿಗಳು ಪತ್ತೆ", stat_reported: "ದೂರುಗಳು ಕಳುಹಿಸಲಾಗಿದೆ", stat_frames: "ಫ್ರೇಮ್ ಪರಿಶೀಲನೆ",
+    stat_drives: "ಡ್ರೈವ್‌ಗಳು", stat_footage: "MB ವಿಡಿಯೋ", stat_km: "ಕಿಮೀ ರಸ್ತೆ",
+    by_size: "ಗಾತ್ರದ ಪ್ರಕಾರ", by_area: "ಪಾಲಿಕೆ ಪ್ರಕಾರ", map_pins: "{n} ಗುರುತಿಸಲಾಗಿದೆ",
+    map_offline: "ನಕ್ಷೆಗೆ ಇಂಟರ್ನೆಟ್ ಬೇಕು. ಬಿಂದುಗಳು ಕೆಳಗೆ ತೋರಿಸಲಾಗಿದೆ.",
     zoom_hint: "ಜೂಮ್‌ಗೆ ಪಿಂಚ್ &middot; ಸರಿಸಲು ಎಳೆಯಿರಿ &middot; ಮರುಹೊಂದಿಸಲು ಡಬಲ್ ಟ್ಯಾಪ್",
     rec_suffix: "&middot; {mb} MB ರೆಕಾರ್ಡ್", rec_failed: "&middot; ರೆಕಾರ್ಡ್ ಆಗುತ್ತಿಲ್ಲ",
     footage_line: "ವಿಡಿಯೋ: {mb} MB &middot; {segments} ತುಣುಕುಗಳು",
@@ -297,7 +328,7 @@ const tSize = (s) => (s ? t("size_" + s) : "");
 let health = { ai_configured: true, email_configured: false, delivery: "gmail_draft" };
 
 function show(screen) {
-  for (const s of ["home", "progress", "detail", "drive", "settings", "review"]) $(s).classList.toggle("hidden", s !== screen);
+  for (const s of ["home", "progress", "detail", "drive", "settings", "review", "dash"]) $(s).classList.toggle("hidden", s !== screen);
   window.scrollTo(0, 0);
 }
 
@@ -325,6 +356,7 @@ function applyLang() {
   $("setBack").textContent = t("back");
   $("setSave").textContent = t("save");
   $("driveTip").textContent = t("drive_tip");
+  $("dashBtn").innerHTML = t("dash_btn");
   $("reviewBtn").textContent = t("review_btn");
   $("exportBtn").textContent = t("export_btn");
   $("lblYes").textContent = t("lbl_yes");
@@ -374,6 +406,14 @@ async function loadReports() {
     const g = groups[groups.length - 1];
     if (r.drive_id && g && g.driveId === r.drive_id) g.items.push(r);
     else groups.push({ driveId: r.drive_id || null, items: [r] });
+  }
+  // Inside a drive, what you actually want is the potholes, not the frames that were
+  // checked and dismissed. Confirmed ones sit on top, rejects below, each still newest
+  // first, so a drive with 3 finds among 200 frames does not bury them.
+  const FOUND = ["draft", "queued", "sent", "unrouted"];
+  for (const g of groups) {
+    if (!g.driveId) continue;
+    g.items.sort((a, b) => (FOUND.includes(b.status) ? 1 : 0) - (FOUND.includes(a.status) ? 1 : 0) || b.id - a.id);
   }
   list.innerHTML = groups.map((g) => {
     const cards = g.items.map(cardHtml).join("");
@@ -1036,6 +1076,109 @@ async function analyseFootage(driveId, driveRec) {
   alert(t("analyse_done", { found, n: planned }));
 }
 
+// ---------- contribution dashboard ----------
+// Leaflet is vendored rather than loaded from a CDN so the app keeps working with no
+// network and ships nothing it does not carry itself. Tiles do need a connection, so
+// when they cannot load the points are still plotted on a plain scatter.
+let mapObj = null;
+
+async function openDash() {
+  const [reports, drives, footage] = await Promise.all([
+    api("/api/reports"), api("/api/drives").catch(() => []), api("/api/footage").catch(() => []),
+  ]);
+  const FOUND = ["draft", "queued", "sent", "unrouted"];
+  const holes = reports.filter((r) => FOUND.includes(r.status));
+  const sent = reports.filter((r) => r.status === "sent" || r.status === "queued").length;
+  const frames = drives.reduce((n, d) => n + (d.checked || 0), 0) || reports.length;
+  const mb = footage.reduce((n, f) => n + f.bytes, 0) / 1048576;
+  const km = drives.reduce((n, d) => n + trackKm(d.gps_track || []), 0);
+
+  const days = new Set(holes.map((r) => new Date(r.created_at * 1000).toDateString())).size;
+  const first = holes.length ? fmtDate(Math.min(...holes.map((r) => r.created_at))) : "";
+  $("dashTitle").textContent = t("dash_title");
+  $("dashRange").innerHTML = holes.length ? t("dash_range", { days, first }) : t("dash_empty");
+
+  const tile = (n, label) => `<div class="card" style="flex:1 1 30%;min-width:96px;margin:0;text-align:center">
+      <div class="verdict" style="font-size:22px;margin:0">${n}</div>
+      <div class="meta">${label}</div></div>`;
+  $("dashStats").innerHTML =
+    tile(holes.length, t("stat_found")) + tile(sent, t("stat_reported")) +
+    tile(frames, t("stat_frames")) + tile(drives.length, t("stat_drives")) +
+    tile(km.toFixed(1), t("stat_km")) + tile(mb.toFixed(0), t("stat_footage"));
+
+  const bars = (title, counts) => {
+    const rows = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    const max = Math.max(1, ...rows.map((r) => r[1]));
+    return `<div class="meta" style="font-weight:600;color:#f2f2f4;margin-bottom:6px">${title}</div>` +
+      (rows.length ? rows.map(([k, v]) => `<div style="margin:6px 0">
+          <div class="meta" style="display:flex;justify-content:space-between"><span>${k}</span><span>${v}</span></div>
+          <div style="height:6px;background:#26272c;border-radius:6px;overflow:hidden">
+            <div style="height:6px;width:${(v / max * 100).toFixed(0)}%;background:var(--accent)"></div></div>
+        </div>`).join("") : `<div class="meta">&mdash;</div>`);
+  };
+  const bySize = {}, byArea = {};
+  for (const r of holes) {
+    if (r.size) bySize[tSize(r.size)] = (bySize[tSize(r.size)] || 0) + 1;
+    const area = (r.officer_name || "").replace(/^Commissioner,\s*/, "") || "—";
+    byArea[area] = (byArea[area] || 0) + 1;
+  }
+  $("dashBreak").innerHTML = bars(t("by_size"), bySize) + `<div style="height:14px"></div>` + bars(t("by_area"), byArea);
+
+  show("dash");
+  drawMap(holes.filter((r) => r.lat != null && r.lng != null));
+}
+
+function trackKm(track) {
+  let m = 0;
+  for (let i = 1; i < track.length; i++) {
+    m += distMeters({ lat: track[i - 1][1], lng: track[i - 1][2] }, { lat: track[i][1], lng: track[i][2] });
+  }
+  return m / 1000;
+}
+
+function drawMap(pins) {
+  const host = $("map");
+  $("mapNote").innerHTML = t("map_pins", { n: pins.length });
+  if (mapObj) { mapObj.remove(); mapObj = null; }
+  host.innerHTML = "";
+  if (!pins.length) return;
+  if (typeof L === "undefined") return scatter(host, pins);
+  try {
+    mapObj = L.map(host, { attributionControl: true });
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+      { maxZoom: 19, attribution: "&copy; OpenStreetMap contributors" }).addTo(mapObj);
+    const group = L.featureGroup(pins.map((r) => {
+      const m = L.circleMarker([r.lat, r.lng], { radius: 7, color: "#ff7a1a", weight: 2,
+        fillColor: "#ff7a1a", fillOpacity: .75 });
+      m.on("click", () => openDetail(r, pins));
+      return m;
+    })).addTo(mapObj);
+    mapObj.fitBounds(group.getBounds().pad(0.25));
+    setTimeout(() => mapObj && mapObj.invalidateSize(), 60);
+  } catch (e) { scatter(host, pins); }
+}
+
+// No tiles, no dependency: latitude and longitude straight onto an SVG. Ugly next to a
+// real map, but it still answers "where have I been reporting".
+function scatter(host, pins) {
+  const lats = pins.map((p) => p.lat), lngs = pins.map((p) => p.lng);
+  const pad = 0.002;
+  const minLat = Math.min(...lats) - pad, maxLat = Math.max(...lats) + pad;
+  const minLng = Math.min(...lngs) - pad, maxLng = Math.max(...lngs) + pad;
+  const W = 340, H = 220;
+  const x = (lng) => ((lng - minLng) / Math.max(1e-9, maxLng - minLng)) * (W - 24) + 12;
+  const y = (lat) => H - 12 - ((lat - minLat) / Math.max(1e-9, maxLat - minLat)) * (H - 24);
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:100%">
+      <rect width="${W}" height="${H}" fill="#0c0d0f"></rect>
+      ${pins.map((p) => `<circle cx="${x(p.lng).toFixed(1)}" cy="${y(p.lat).toFixed(1)}" r="5"
+         fill="#ff7a1a" fill-opacity="0.8" stroke="#ff7a1a"></circle>`).join("")}
+    </svg>`;
+  $("mapNote").innerHTML = t("map_pins", { n: pins.length }) + " &middot; " + t("map_offline");
+}
+
+$("dashBtn").onclick = openDash;
+$("dashBack").onclick = () => { show("home"); loadReports(); };
+
 $("reviewBtn").onclick = startReview;
 $("reviewPhoto").onclick = () => { if (reviewQueue[0]) openViewer(reviewQueue[0]); };
 $("lblYes").onclick = () => labelCurrent("pothole");
@@ -1091,7 +1234,7 @@ window.addEventListener("pipeline-verdict", (e) => {
 window.handleAppBack = () => {
   if (drive) { stopDrive(); return true; }
   if (!$("viewer").classList.contains("hidden")) { closeViewer(); return true; }
-  for (const s of ["detail", "settings", "progress", "drive", "review"]) {
+  for (const s of ["detail", "settings", "progress", "drive", "review", "dash"]) {
     if (!$(s).classList.contains("hidden")) { show("home"); loadReports(); return true; }
   }
   return false;
