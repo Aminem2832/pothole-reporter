@@ -84,6 +84,20 @@
     <div class="meta" id="driveTip" style="text-align:center;margin-top:10px">Mount the phone facing the road. Frames are checked continuously while you move (about every 10 meters). The back button also stops the drive.</div>
   </div>
 
+  <div id="review" class="hidden">
+    <img id="reviewPhoto" class="big-photo" style="max-height:52vh" alt="">
+    <div class="meta" id="reviewMeta"></div>
+    <div class="meta" id="reviewSaid" style="margin-top:6px"></div>
+    <div class="btn-row">
+      <button class="ghost danger" id="lblNo">Not a pothole</button>
+      <button class="send" id="lblYes">Pothole</button>
+    </div>
+    <div class="btn-row">
+      <button class="ghost" id="lblSkip">Skip</button>
+      <button class="ghost" id="reviewBack">Done</button>
+    </div>
+  </div>
+
   <div id="settings" class="hidden">
     <div class="card">
       <div class="verdict" id="settingsTitle">Settings</div>
@@ -102,6 +116,8 @@
         <span id="debugLabel">Debug mode: keep every drive frame for review</span>
       </label>
       <div class="meta" id="settingsNote" style="margin-top:10px">Complaints are always created as email drafts addressed to the concerned corporation officer. Nothing sends until you press send in your email app.</div>
+      <button class="ghost" id="reviewBtn" style="width:100%;margin-top:12px">Review and label frames</button>
+      <button class="ghost" id="exportBtn" style="width:100%;margin-top:8px">Export labelled dataset</button>
       <button class="ghost danger" id="wipeBtn" style="width:100%;margin-top:12px">Delete all reports and photos</button>
       <div class="btn-row">
         <button class="ghost" id="setBack">Back</button>
@@ -134,6 +150,13 @@ const I18N = {
     back: "Back", save: "Save", discard: "Discard", del: "Delete", email_btn: "Email", stop: "&#9632; Stop", working: "Working...",
     chip_draft: "Draft", chip_sent: "Sent", chip_queued: "Opened in email", chip_rejected: "Not a pothole",
     chip_unrouted: "Outside coverage",
+    review_btn: "Review and label frames", export_btn: "Export labelled dataset",
+    lbl_yes: "Pothole", lbl_no: "Not a pothole", lbl_skip: "Skip", lbl_done: "Done",
+    review_empty: "Nothing left to label. Drive with debug mode on to collect frames.",
+    review_progress: "{n} left to label &middot; {done} labelled so far",
+    model_said: "The app said: {verdict} ({pct}%)",
+    export_none: "Nothing labelled yet. Tap Review and label frames first.",
+    export_ready: "{n} labelled frames, {mb} MB. Choose where to send it.",
     outside_coverage: "This location is outside the area this app covers.",
     outside_coverage_help: "The officer directory and road contracts only cover Bengaluru (the five GBA city corporations), so there is no authority this app can correctly address. The photo and location are saved.",
     size_small: "small", size_medium: "medium", size_large: "large",
@@ -185,6 +208,13 @@ const I18N = {
     back: "ಹಿಂದೆ", save: "ಉಳಿಸಿ", discard: "ತ್ಯಜಿಸಿ", del: "ಅಳಿಸಿ", email_btn: "ಇಮೇಲ್", stop: "&#9632; ನಿಲ್ಲಿಸಿ", working: "ನಡೆಯುತ್ತಿದೆ...",
     chip_draft: "ಡ್ರಾಫ್ಟ್", chip_sent: "ಕಳುಹಿಸಲಾಗಿದೆ", chip_queued: "ಇಮೇಲ್‌ನಲ್ಲಿ ತೆರೆಯಲಾಗಿದೆ", chip_rejected: "ಗುಂಡಿ ಅಲ್ಲ",
     chip_unrouted: "ವ್ಯಾಪ್ತಿಯ ಹೊರಗೆ",
+    review_btn: "ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಗುರುತಿಸಿ", export_btn: "ಗುರುತಿಸಿದ ಡೇಟಾಸೆಟ್ ರಫ್ತು ಮಾಡಿ",
+    lbl_yes: "ಗುಂಡಿ", lbl_no: "ಗುಂಡಿ ಅಲ್ಲ", lbl_skip: "ಬಿಟ್ಟುಬಿಡಿ", lbl_done: "ಮುಗಿಯಿತು",
+    review_empty: "ಗುರುತಿಸಲು ಏನೂ ಉಳಿದಿಲ್ಲ. ಡೀಬಗ್ ಮೋಡ್ ಆನ್ ಮಾಡಿ ಡ್ರೈವ್ ಮಾಡಿ.",
+    review_progress: "{n} ಬಾಕಿ &middot; {done} ಗುರುತಿಸಲಾಗಿದೆ",
+    model_said: "ಆ್ಯಪ್ ಹೇಳಿದ್ದು: {verdict} ({pct}%)",
+    export_none: "ಇನ್ನೂ ಏನೂ ಗುರುತಿಸಿಲ್ಲ. ಮೊದಲು ಪರಿಶೀಲಿಸಿ.",
+    export_ready: "{n} ಗುರುತಿಸಿದ ಫ್ರೇಮ್‌ಗಳು, {mb} MB. ಎಲ್ಲಿಗೆ ಕಳುಹಿಸಬೇಕೆಂದು ಆಯ್ಕೆಮಾಡಿ.",
     outside_coverage: "ಈ ಸ್ಥಳ ಈ ಆ್ಯಪ್ ಒಳಗೊಂಡ ವ್ಯಾಪ್ತಿಯ ಹೊರಗಿದೆ.",
     outside_coverage_help: "ಅಧಿಕಾರಿಗಳ ಪಟ್ಟಿ ಮತ್ತು ರಸ್ತೆ ಗುತ್ತಿಗೆಗಳು ಬೆಂಗಳೂರಿಗೆ (ಜಿಬಿಎ ಐದು ಮಹಾನಗರ ಪಾಲಿಕೆಗಳು) ಮಾತ್ರ ಸೀಮಿತವಾಗಿವೆ. ಆದ್ದರಿಂದ ಸರಿಯಾದ ಅಧಿಕಾರಿಯನ್ನು ಸೂಚಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ. ಫೋಟೋ ಮತ್ತು ಸ್ಥಳ ಉಳಿಸಲಾಗಿದೆ.",
     size_small: "ಸಣ್ಣ", size_medium: "ಮಧ್ಯಮ", size_large: "ದೊಡ್ಡ",
@@ -229,7 +259,7 @@ const tSize = (s) => (s ? t("size_" + s) : "");
 let health = { ai_configured: true, email_configured: false, delivery: "gmail_draft" };
 
 function show(screen) {
-  for (const s of ["home", "progress", "detail", "drive", "settings"]) $(s).classList.toggle("hidden", s !== screen);
+  for (const s of ["home", "progress", "detail", "drive", "settings", "review"]) $(s).classList.toggle("hidden", s !== screen);
   window.scrollTo(0, 0);
 }
 
@@ -257,6 +287,12 @@ function applyLang() {
   $("setBack").textContent = t("back");
   $("setSave").textContent = t("save");
   $("driveTip").textContent = t("drive_tip");
+  $("reviewBtn").textContent = t("review_btn");
+  $("exportBtn").textContent = t("export_btn");
+  $("lblYes").textContent = t("lbl_yes");
+  $("lblNo").textContent = t("lbl_no");
+  $("lblSkip").textContent = t("lbl_skip");
+  $("reviewBack").textContent = t("lbl_done");
   $("driveStop").innerHTML = t("stop");
 }
 
@@ -616,6 +652,77 @@ document.addEventListener("visibilitychange", async () => {
 // Opening the camera is the cue that a call is coming: warm the connection now
 // so the photo does not also pay for a TLS handshake.
 $("captureBtn").onclick = () => { StandaloneAPI.prewarm(); $("fileInput").click(); };
+
+// ---------- labelling ----------
+// A human label is the only thing that can measure the detector. The model's own
+// verdict is shown but deliberately after the photo, so it nudges the eye as little
+// as possible: an unlabelled frame is worth more than one labelled by suggestion.
+let reviewQueue = [], reviewDone = 0;
+
+async function startReview() {
+  const all = await api("/api/reports");
+  reviewQueue = all.filter((r) => !r.human_label && r.photo_url);
+  reviewDone = all.length - reviewQueue.length;
+  if (!reviewQueue.length) { alert(t("review_empty")); return; }
+  show("review");
+  nextReviewFrame();
+}
+
+function nextReviewFrame() {
+  if (!reviewQueue.length) { alert(t("review_empty")); show("home"); loadReports(); return; }
+  const r = reviewQueue[0];
+  $("reviewPhoto").src = r.photo_url;
+  $("reviewMeta").innerHTML = t("review_progress", { n: reviewQueue.length, done: reviewDone });
+  const verdict = r.is_pothole ? t("lbl_yes") : t("lbl_no");
+  $("reviewSaid").innerHTML = t("model_said", { verdict, pct: ((r.confidence || 0) * 100).toFixed(0) });
+}
+
+async function labelCurrent(label) {
+  const r = reviewQueue.shift();
+  if (!r) return;
+  if (label) {
+    try {
+      await api(`/api/reports/${r.id}/label`, { method: "POST", body: JSON.stringify({ label }) });
+      reviewDone++;
+    } catch (e) { alert(e.message); }
+  }
+  nextReviewFrame();
+}
+
+$("reviewBtn").onclick = startReview;
+$("lblYes").onclick = () => labelCurrent("pothole");
+$("lblNo").onclick = () => labelCurrent("not_pothole");
+$("lblSkip").onclick = () => labelCurrent(null);
+$("reviewBack").onclick = () => { show("home"); loadReports(); };
+
+$("exportBtn").onclick = async () => {
+  const btn = $("exportBtn");
+  btn.disabled = true; btn.textContent = t("working");
+  try {
+    const zip = await api("/api/export", { method: "POST" });
+    alert(t("export_ready", { n: zip.count, mb: (zip.bytes / 1048576).toFixed(1) }));
+    await shareZip(zip);
+  } catch (e) { alert(e.message); }
+  btn.disabled = false; btn.textContent = t("export_btn");
+};
+
+// Written to cache and handed to the share sheet, so the zip goes wherever you want
+// (Drive, mail, a chat) without the app needing an account or a server.
+async function shareZip(zip) {
+  const P = window.Capacitor && Capacitor.Plugins;
+  if (!P || !P.Filesystem || !P.Share) {
+    // Browser fallback, used by the test harness.
+    const bin = atob(zip.base64), arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([arr], { type: "application/zip" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = zip.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    return;
+  }
+  const w = await P.Filesystem.writeFile({ path: zip.name, data: zip.base64, directory: "CACHE" });
+  await P.Share.share({ title: zip.name, files: [w.uri] });
+}
 $("fileInput").onchange = (e) => { handleFile(e.target.files[0]); e.target.value = ""; };
 
 // Live pipeline progress from the standalone engine (stage-by-stage updates).
@@ -635,7 +742,7 @@ window.addEventListener("pipeline-verdict", (e) => {
 // Drive mode stops; any other screen returns home; home lets the app exit.
 window.handleAppBack = () => {
   if (drive) { stopDrive(); return true; }
-  for (const s of ["detail", "settings", "progress", "drive"]) {
+  for (const s of ["detail", "settings", "progress", "drive", "review"]) {
     if (!$(s).classList.contains("hidden")) { show("home"); loadReports(); return true; }
   }
   return false;

@@ -568,6 +568,92 @@ ${S.name}`;
     return toDict(rec);
   }
 
+  // ---------- dataset export ----------
+  // A stored-entry ZIP, written by hand: JPEGs are already compressed, so there is
+  // nothing to gain from deflate and no reason to pull in a zip library.
+  const CRC = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+      t[n] = c >>> 0;
+    }
+    return (buf) => {
+      let c = 0xffffffff;
+      for (let i = 0; i < buf.length; i++) c = t[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+      return (c ^ 0xffffffff) >>> 0;
+    };
+  })();
+
+  function zip(files) {
+    const enc = new TextEncoder();
+    const chunks = [], central = [];
+    let offset = 0;
+    const u16 = (n) => [n & 255, (n >> 8) & 255];
+    const u32 = (n) => [n & 255, (n >> 8) & 255, (n >> 16) & 255, (n >>> 24) & 255];
+    for (const f of files) {
+      const name = enc.encode(f.name);
+      const crc = CRC(f.data);
+      const local = new Uint8Array([...u32(0x04034b50), ...u16(20), ...u16(0), ...u16(0),
+        ...u16(0), ...u16(0), ...u32(crc), ...u32(f.data.length), ...u32(f.data.length),
+        ...u16(name.length), ...u16(0)]);
+      chunks.push(local, name, f.data);
+      central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0),
+        ...u16(0), ...u16(0), ...u16(0), ...u32(crc), ...u32(f.data.length), ...u32(f.data.length),
+        ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0),
+        ...u32(offset)]), name);
+      offset += local.length + name.length + f.data.length;
+    }
+    const centralSize = central.reduce((n, c) => n + c.length, 0);
+    const end = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0),
+      ...u16(files.length), ...u16(files.length), ...u32(centralSize), ...u32(offset), ...u16(0)]);
+    const all = [...chunks, ...central, end];
+    const out = new Uint8Array(all.reduce((n, c) => n + c.length, 0));
+    let at = 0;
+    for (const c of all) { out.set(c, at); at += c.length; }
+    return out;
+  }
+
+  const b64ToBytes = (b64) => {
+    const bin = atob(b64);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  };
+  const bytesToB64 = (bytes) => {
+    let s = "";
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    return btoa(s);
+  };
+
+  // Exports only what a human actually labelled: a model verdict is not ground truth,
+  // and a benchmark built from the detector's own opinions cannot measure the detector.
+  async function exportDataset() {
+    const labelled = (await allReports()).filter((r) => r.human_label);
+    if (!labelled.length) throw new Error("Nothing labelled yet. Open Review frames and tag some first.");
+    const files = [], index = [];
+    for (const r of labelled) {
+      const name = `images/frame-${r.id}.jpg`;
+      files.push({ name, data: b64ToBytes(r.photo.split(",")[1]) });
+      index.push({
+        path: name,
+        label: r.human_label,
+        labelled_by: "owner",
+        model_said: { is_pothole: !!r.is_pothole, size: r.size, confidence: r.confidence,
+                      description: r.description },
+        lat: r.lat, lng: r.lng, address: r.address,
+        drive_id: r.drive_id, captured_at: new Date(r.created_at * 1000).toISOString(),
+      });
+    }
+    files.push({ name: "labels.json", data: new TextEncoder().encode(
+      JSON.stringify({ exported_at: new Date().toISOString(), count: index.length, images: index }, null, 1)) });
+    const bytes = zip(files);
+    return { name: `pothole-dataset-${Date.now()}.zip`, base64: bytesToB64(bytes),
+             count: index.length, bytes: bytes.length };
+  }
+
   // ---------- API dispatch ----------
   async function handle(path, opts) {
     const method = ((opts && opts.method) || "GET").toUpperCase();
@@ -581,6 +667,16 @@ ${S.name}`;
     if (path === "/api/reports" && method === "DELETE") {
       await op("readwrite", (s) => s.clear());
       return { ok: true };
+    }
+    if (path === "/api/export" && method === "POST") return exportDataset();
+    if ((m = path.match(/^\/api\/reports\/(\d+)\/label$/)) && method === "POST") {
+      const rec = await getReport(m[1]);
+      if (!rec) throw new Error("Report not found.");
+      const want = JSON.parse(opts.body).label;
+      if (!["pothole", "not_pothole", null].includes(want)) throw new Error("Bad label.");
+      rec.human_label = want;
+      await putReport(rec);
+      return toDict(rec);
     }
     if (path === "/api/report" && method === "POST") return createReport(opts.body, false);
     if (path === "/api/frame" && method === "POST") return createReport(opts.body, true);

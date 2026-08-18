@@ -41,6 +41,16 @@ Settings (gear icon) also has:
   reviewable entries with the confidence and the reason. Use it to diagnose
   missed potholes; frames add up, so clear them afterwards.
 - **Delete all reports and photos:** wipes the on-device store.
+- **Review and label frames:** step through captured frames and mark each one
+  pothole or not a pothole. The model's own verdict is shown after the photo, so
+  it nudges your eye as little as possible.
+- **Export labelled dataset:** packs every frame *you* labelled, plus a
+  `labels.json` recording your label alongside what the model said, into a zip
+  and hands it to the Android share sheet. No account and no server: it goes to
+  Drive, mail or a chat, and from there into `eval/` on a laptop.
+
+Only human-labelled frames are exported. A benchmark built from the detector's
+own verdicts cannot measure the detector.
 
 ## How it works
 
