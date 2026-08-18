@@ -9,6 +9,11 @@ itself: you press send in your email app.
 
 No server, no backend, no credentials in the APK. The app is the product.
 
+![How a photo becomes a complaint](docs/architecture.png)
+
+Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw),
+which you can open and change at [excalidraw.com](https://excalidraw.com).
+
 ## Install and set up (2 minutes)
 
 1. Download `PotholeReporter.apk` from the
