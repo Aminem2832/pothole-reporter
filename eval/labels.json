@@ -1,131 +1,149 @@
 {
-  "_comment": "Ground truth for the detection benchmark. Images are NOT committed: see eval/README.md for how to populate eval/images/. 'label' is one of pothole, not_pothole, unlabelled. Unlabelled images are still run and reported, but are excluded from the accuracy rates.",
+  "_comment": "Ground truth for the detection benchmark. Images are NOT committed: see eval/README.md. 'label' is pothole, not_pothole or unlabelled. 'labelled_by' matters: only the six photos were confirmed by the project owner. Everything marked UNVERIFIED is the assistant's own judgment and has not been reviewed by a human, including all four negatives that the false-positive rate is measured against. Treat rates computed against unverified labels as provisional.",
   "images": [
     {
       "path": "seed/IMG20260720144314.jpg",
       "label": "pothole",
       "notes": "Medium pothole with loose stones near the kerb, close range.",
       "source": "project owner, own camera",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "owner"
     },
     {
       "path": "seed/IMG20260720144404.jpg",
       "label": "pothole",
       "notes": "Multiple eroded patches and open potholes near the lane line.",
       "source": "project owner, own camera",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "owner"
     },
     {
       "path": "seed/IMG20260720144405.jpg",
       "label": "pothole",
       "notes": "Confirmed real pothole, close range.",
       "source": "project owner, own camera",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "owner"
     },
     {
       "path": "seed/IMG20260720144447.jpg",
       "label": "pothole",
       "notes": "Confirmed real pothole, close range.",
       "source": "project owner, own camera",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "owner"
     },
     {
       "path": "seed/IMG20260720144450.jpg",
       "label": "pothole",
       "notes": "Confirmed real pothole, close range.",
       "source": "project owner, own camera",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "owner"
     },
     {
       "path": "seed/IMG20260720144618.jpg",
       "label": "pothole",
       "notes": "Long strip of broken asphalt and loose aggregate across the lane. gpt-5-nano missed this one entirely, which is why the nano pre-screen was removed.",
       "source": "project owner, own camera",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "owner"
     },
     {
       "path": "seed/t013s.jpg",
       "label": "not_pothole",
       "notes": "Loose debris and an exposed drainage grate at the kerb. The carriageway itself is intact. The sharpest probe in the set: the live prompt rejects it 10/10, and every road-band crop variant accepted it.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t015s.jpg",
       "label": "not_pothole",
       "notes": "Intact carriageway with construction debris at the roadside.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t049s.jpg",
       "label": "not_pothole",
       "notes": "Silt and erosion strip along the lane, no discrete cavity.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t061s.jpg",
       "label": "not_pothole",
       "notes": "Intact road surface, dusty at the edges.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t085s.jpg",
       "label": "pothole",
       "notes": "Broken asphalt and loose aggregate mid-lane, roughly 15 to 20 m ahead.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t089s.jpg",
       "label": "pothole",
       "notes": "Broken, eroded asphalt with exposed edges beside a bus.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t047s.jpg",
       "label": "unlabelled",
       "notes": "Genuinely ambiguous, and the most unstable frame in the set: accepted 3/5 and 0/5 on byte-identical input. Kept out of the rates on purpose. Needs about 30 trials before any verdict on it means anything.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t029s.jpg",
       "label": "unlabelled",
       "notes": "Not yet reviewed by a human.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t031s.jpg",
       "label": "unlabelled",
       "notes": "Not yet reviewed by a human.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t057s.jpg",
       "label": "unlabelled",
       "notes": "Not yet reviewed by a human.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t059s.jpg",
       "label": "unlabelled",
       "notes": "Not yet reviewed by a human.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     },
     {
       "path": "seed/t087s.jpg",
       "label": "unlabelled",
       "notes": "Not yet reviewed by a human.",
       "source": "project owner, dashcam frame",
-      "licence": "owner"
+      "licence": "owner",
+      "labelled_by": "assistant, UNVERIFIED"
     }
   ]
 }
