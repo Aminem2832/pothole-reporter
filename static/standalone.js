@@ -420,14 +420,25 @@ ${S.name}`;
   const toDict = (r) => ({ ...r, photo_url: r.photo });
 
   // ---------- image ----------
-  async function toDataUrl(blob, maxDim) {
-    const bmp = await createImageBitmap(blob);
+  // Between 7 PM and 5 AM a dark frame is lifted so the model can read the road.
+  // This is a detection aid only: it never touches the copy attached to a complaint,
+  // which must be what the camera saw and not something visibly processed.
+  const isNight = () => { const h = new Date().getHours(); return h >= 19 || h < 5; };
+
+  async function toDataUrl(blob, maxDim, quality = 0.85, boost = false) {
+    const bmp = await createImageBitmap(blob, { imageOrientation: "from-image" });
     const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
     const c = document.createElement("canvas");
     c.width = Math.round(bmp.width * scale);
     c.height = Math.round(bmp.height * scale);
-    c.getContext("2d").drawImage(bmp, 0, 0, c.width, c.height);
-    return c.toDataURL("image/jpeg", 0.85);
+    const ctx = c.getContext("2d");
+    ctx.drawImage(bmp, 0, 0, c.width, c.height);
+    if (boost && isNight()) {
+      ctx.filter = "brightness(1.6) contrast(1.15)";
+      ctx.drawImage(bmp, 0, 0, c.width, c.height);
+      ctx.filter = "none";
+    }
+    return c.toDataURL("image/jpeg", quality);
   }
 
   // ---------- pipeline ----------
@@ -453,7 +464,7 @@ ${S.name}`;
     // Drive Mode ran at 1280 until an eval showed it drops real potholes that survive
     // at full size: distant, small defects lose just enough detail to fall under the
     // confidence gate. Resolution is the one thing detection cannot get back.
-    const dataUrl = await toDataUrl(photo, 2000);
+    const dataUrl = await toDataUrl(photo, 2000, 0.85, true);
     // Geocoding runs in parallel with the AI calls; it never gates detection.
     const geoP = lat != null ? reverseGeocode(lat, lng).catch(() => null) : Promise.resolve(null);
     progress(pmsg("detect"));
@@ -493,9 +504,13 @@ ${S.name}`;
     const [subject, body] = accepted && covered
       ? draftEmail(a, lat, lng, address, officerName, tender)
       : [null, null];
+    // The evidence copy: what the officer receives. Detection works on a small
+    // frame for speed and token cost, but the complaint deserves the full capture,
+    // unmodified. Only kept for reports that can actually be emailed.
+    const photoFull = accepted && covered ? await toDataUrl(photo, 4000, 0.92, false) : null;
 
     const rec = {
-      created_at: Date.now() / 1000, lat, lng, address, photo: dataUrl,
+      created_at: Date.now() / 1000, lat, lng, address, photo: dataUrl, photo_full: photoFull,
       is_pothole: a.is_pothole ? 1 : 0, size: a.size, confidence: a.confidence,
       description: a.description, email_subject: subject, email_body: body,
       status: accepted ? (covered ? "draft" : "unrouted") : "rejected",
@@ -540,7 +555,9 @@ ${S.name}`;
         to: [to],
         subject: rec.email_subject || "",
         body: rec.email_body || "",
-        attachments: [{ type: "base64", name: "pothole.jpg", path: rec.photo.split(",")[1] }],
+        // Full capture where we kept one; the working copy is only a fallback.
+        attachments: [{ type: "base64", name: "pothole.jpg",
+                        path: (rec.photo_full || rec.photo).split(",")[1] }],
       });
     } else {
       console.log("[harness] would open native compose to:", to);

@@ -487,39 +487,29 @@ function updateHud(status) {
 const withTimeout = (p, ms) =>
   Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("capture timeout")), ms))]);
 
-// Night boost, clock-based (7 PM to 5 AM local): lift brightness and contrast.
-function applyNightBoost(ctx, draw) {
-  const hour = new Date().getHours();
-  if (hour >= 19 || hour < 5) {
-    ctx.filter = "brightness(1.6) contrast(1.15)";
-    draw();
-    ctx.filter = "none";
-  }
-}
-
+// Capture hands the engine the best frame it can get, unmodified. The engine makes
+// its own small working copy for detection and applies the night boost there, so the
+// copy attached to a complaint stays what the camera actually saw.
 function grabPreview(video) {
   const canvas = document.createElement("canvas");
   const scale = Math.min(1, 1280 / video.videoWidth);
   canvas.width = Math.round(video.videoWidth * scale);
   canvas.height = Math.round(video.videoHeight * scale);
-  const ctx = canvas.getContext("2d");
-  const draw = () => ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  draw();
-  applyNightBoost(ctx, draw);
-  return new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.8));
+  canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+  return new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.9));
 }
 
+// Capped at the evidence ceiling rather than the detection size: a full-sensor still
+// can be 17 MB, and decoding several of those at once mid-drive is how a phone runs
+// out of memory.
 async function rescaleBlob(blob, maxDim) {
   const bmp = await createImageBitmap(blob, { imageOrientation: "from-image" });
   const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bmp.width * scale);
   canvas.height = Math.round(bmp.height * scale);
-  const ctx = canvas.getContext("2d");
-  const draw = () => ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  draw();
-  applyNightBoost(ctx, draw);
-  return new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.85));
+  canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  return new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.92));
 }
 
 async function captureFrame(video) {
@@ -529,7 +519,7 @@ async function captureFrame(video) {
   if (drive && drive.imageCapture && !drive.stillFailed) {
     try {
       const still = await withTimeout(drive.imageCapture.takePhoto(), 2500);
-      const out = await rescaleBlob(still, 2000);
+      const out = await rescaleBlob(still, 4000);
       if (out) return out;
       drive.stillFailed = true;
     } catch (e) {
