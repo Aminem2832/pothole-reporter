@@ -9,6 +9,14 @@ itself: you press send in your email app.
 
 No server, no backend, no credentials in the APK. The app is the product.
 
+**Coverage: Bengaluru only.** The officer directory holds the five Greater
+Bengaluru Authority city corporations, and the bundled contracts are BBMP
+contracts. Outside Bengaluru the app still detects the pothole and saves the
+photo and location, but it will not name a recipient or a contractor, because
+guessing would address your complaint to a body with no jurisdiction over that
+road. Those reports are marked "Outside coverage". Extending to the rest of
+Karnataka is on the roadmap below.
+
 ![How a photo becomes a complaint](docs/architecture.png)
 
 Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw),
@@ -143,6 +151,13 @@ MIT. See [LICENSE](LICENSE).
 
 ## Roadmap ideas
 
+- Pan-Karnataka coverage. Karnataka has 319 urban local bodies (18 city
+  corporations, then city and town councils and panchayats), plus PWD for state
+  highways and the panchayat engineering department for rural roads. The state
+  GIS (KGIS) answers "which body owns this point" from a lat/lng in one query
+  and returns the national LGD code, which is the right key for an officer
+  directory. Karnataka ULB emails are published per district on the NIC district
+  sites. KPPP covers road contracts statewide, not just Bengaluru.
 - Keystore-backed key storage
 - Offline corporation routing via boundary polygons (no Nominatim dependency)
 - Fresh tender data past Apr 2026 (KPPP API pull) and ward-polygon matching

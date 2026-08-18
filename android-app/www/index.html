@@ -27,6 +27,7 @@
   .chip.sent { background:#12331d; color:#7ce8a2; }
   .chip.rejected { background:#331516; color:#ff9d9d; }
   .chip.queued { background:#122f33; color:#7cd8e8; }
+  .chip.unrouted { background:#2b2b33; color:#b9b9c6; }
   .meta { color:var(--mut); font-size:12px; margin-top:2px; }
   label { display:block; font-size:12px; color:var(--mut); margin:10px 0 4px; }
   input[type=text], textarea { width:100%; background:#131417; color:#f2f2f4; border:1px solid var(--line); border-radius:10px; padding:10px; font:inherit; font-size:14px; }
@@ -132,6 +133,9 @@ const I18N = {
     welcome_hint: "Welcome. Paste your OpenAI API key to enable pothole detection. It is stored only on this device.",
     back: "Back", save: "Save", discard: "Discard", del: "Delete", email_btn: "Email", stop: "&#9632; Stop", working: "Working...",
     chip_draft: "Draft", chip_sent: "Sent", chip_queued: "Opened in email", chip_rejected: "Not a pothole",
+    chip_unrouted: "Outside coverage",
+    outside_coverage: "This location is outside the area this app covers.",
+    outside_coverage_help: "The officer directory and road contracts only cover Bengaluru (the five GBA city corporations), so there is no authority this app can correctly address. The photo and location are saved.",
     size_small: "small", size_medium: "medium", size_large: "large",
     verdict_detected: "{size} pothole detected ({pct}% confident)",
     verdict_rejected: "No pothole confirmed",
@@ -180,6 +184,9 @@ const I18N = {
     welcome_hint: "ಸ್ವಾಗತ. ಗುಂಡಿ ಪತ್ತೆಗೆ ನಿಮ್ಮ OpenAI API ಕೀ ಅಂಟಿಸಿ. ಇದು ಈ ಸಾಧನದಲ್ಲಿ ಮಾತ್ರ ಸಂಗ್ರಹವಾಗುತ್ತದೆ.",
     back: "ಹಿಂದೆ", save: "ಉಳಿಸಿ", discard: "ತ್ಯಜಿಸಿ", del: "ಅಳಿಸಿ", email_btn: "ಇಮೇಲ್", stop: "&#9632; ನಿಲ್ಲಿಸಿ", working: "ನಡೆಯುತ್ತಿದೆ...",
     chip_draft: "ಡ್ರಾಫ್ಟ್", chip_sent: "ಕಳುಹಿಸಲಾಗಿದೆ", chip_queued: "ಇಮೇಲ್‌ನಲ್ಲಿ ತೆರೆಯಲಾಗಿದೆ", chip_rejected: "ಗುಂಡಿ ಅಲ್ಲ",
+    chip_unrouted: "ವ್ಯಾಪ್ತಿಯ ಹೊರಗೆ",
+    outside_coverage: "ಈ ಸ್ಥಳ ಈ ಆ್ಯಪ್ ಒಳಗೊಂಡ ವ್ಯಾಪ್ತಿಯ ಹೊರಗಿದೆ.",
+    outside_coverage_help: "ಅಧಿಕಾರಿಗಳ ಪಟ್ಟಿ ಮತ್ತು ರಸ್ತೆ ಗುತ್ತಿಗೆಗಳು ಬೆಂಗಳೂರಿಗೆ (ಜಿಬಿಎ ಐದು ಮಹಾನಗರ ಪಾಲಿಕೆಗಳು) ಮಾತ್ರ ಸೀಮಿತವಾಗಿವೆ. ಆದ್ದರಿಂದ ಸರಿಯಾದ ಅಧಿಕಾರಿಯನ್ನು ಸೂಚಿಸಲು ಸಾಧ್ಯವಿಲ್ಲ. ಫೋಟೋ ಮತ್ತು ಸ್ಥಳ ಉಳಿಸಲಾಗಿದೆ.",
     size_small: "ಸಣ್ಣ", size_medium: "ಮಧ್ಯಮ", size_large: "ದೊಡ್ಡ",
     verdict_detected: "{size} ಗುಂಡಿ ಪತ್ತೆಯಾಗಿದೆ ({pct}% ವಿಶ್ವಾಸ)",
     verdict_rejected: "ಗುಂಡಿ ದೃಢಪಟ್ಟಿಲ್ಲ",
@@ -231,7 +238,8 @@ function fmtDate(ts) { return new Date(ts * 1000).toLocaleString([], {day:"numer
 const sendLabel = () => t("email_btn");
 
 function chip(status) {
-  const label = { draft: t("chip_draft"), sent: t("chip_sent"), queued: t("chip_queued"), rejected: t("chip_rejected") }[status] || status;
+  const label = { draft: t("chip_draft"), sent: t("chip_sent"), queued: t("chip_queued"),
+                  rejected: t("chip_rejected"), unrouted: t("chip_unrouted") }[status] || status;
   return `<span class="chip ${status}">${label}</span>`;
 }
 
@@ -332,7 +340,24 @@ async function handleFile(file) {
 
 function openDetail(r) {
   const d = $("detail");
-  if (r.status === "rejected") {
+  if (r.status === "unrouted") {
+    // A confirmed pothole the app cannot address. It says so rather than sending the
+    // complaint to a body with no jurisdiction there.
+    d.innerHTML = `
+      <div class="card">
+        <img class="big-photo" src="${r.photo_url}" alt="">
+        <div class="verdict" style="color:var(--accent)">
+          ${t("verdict_detected", { size: tSize(r.size).toUpperCase(), pct: (r.confidence * 100).toFixed(0) })}
+        </div>
+        ${r.address ? `<div class="meta">&#128205; ${r.address}</div>` : ""}
+        <div class="meta" style="color:var(--bad)">&#9888; ${t("outside_coverage")}</div>
+        <div class="meta">${t("outside_coverage_help")}</div>
+        <div class="btn-row">
+          <button class="ghost" id="backBtn">${t("back")}</button>
+          <button class="ghost danger" id="discardBtn">${t("del")}</button>
+        </div>
+      </div>`;
+  } else if (r.status === "rejected") {
     d.innerHTML = `
       <div class="card">
         <img class="big-photo" src="${r.photo_url}" alt="">

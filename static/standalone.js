@@ -40,6 +40,21 @@
   };
   const HQ = ["Commissioner, Greater Bengaluru Authority (HQ)", "comm@bbmp.gov.in"];
 
+  // The officer directory and the bundled contracts are Bengaluru-only. Outside it
+  // there is no authority this app can name, and guessing sends a citizen's complaint
+  // to a body with no jurisdiction, so coverage is checked before anything is routed.
+  const BLR = { minLat: 12.70, maxLat: 13.25, minLng: 77.25, maxLng: 77.90 };
+  function inCoverage(lat, lng, address) {
+    if (lat != null && lng != null && !Number.isNaN(lat) && !Number.isNaN(lng)) {
+      return lat >= BLR.minLat && lat <= BLR.maxLat && lng >= BLR.minLng && lng <= BLR.maxLng;
+    }
+    if (address) {
+      const low = address.toLowerCase();
+      return low.includes("bengaluru") || low.includes("bangalore");
+    }
+    return false; // no location at all: we cannot claim to know who is responsible
+  }
+
   const DETECT_PROMPT = `You are inspecting a road photo taken in Bengaluru for a civic complaint app.
 
 Decide whether the photo clearly shows a pothole on a road surface.
@@ -219,7 +234,10 @@ Decide whether the photo clearly shows a pothole on a road surface.
     } catch (e) { return null; }
   }
 
-  function routeOfficer(address) {
+  // Returns [null, null] when the pothole is outside the covered area. HQ stays the
+  // fallback only *within* Bengaluru, where it genuinely has jurisdiction.
+  function routeOfficer(address, covered) {
+    if (!covered) return [null, null];
     if (address) {
       const low = address.toLowerCase();
       for (const [needle, officer] of Object.entries(OFFICERS)) {
@@ -424,7 +442,7 @@ ${S.name}`;
     if (driveMode && lat != null) {
       const cutoff = Date.now() / 1000 - DEDUPE_WINDOW_S;
       for (const r of await allReports()) {
-        if ((r.status === "draft" || r.status === "queued" || r.status === "sent") && r.lat != null &&
+        if ((r.status === "draft" || r.status === "queued" || r.status === "sent" || r.status === "unrouted") && r.lat != null &&
             r.created_at > cutoff && distMeters(lat, lng, r.lat, r.lng) < DEDUPE_RADIUS_M) {
           return { found: false, skipped: "already reported nearby" };
         }
@@ -443,7 +461,12 @@ ${S.name}`;
     // so the wait is the max of the two rather than their sum, and one watching user
     // feels it. Drive Mode rejects most frames and reports through the HUD, so
     // speculating there would buy nothing and bill a text call per frame.
-    const tenderP = driveMode ? null : geoP.then((addr) => matchTender(addr)).catch(() => null);
+    // Coordinates settle coverage on their own; only a missing fix has to wait for the
+    // address. Speculating on contracts outside Bengaluru would match a road name in
+    // the wrong city, so it is not started at all.
+    const coordCoverage = (lat != null && lng != null) ? inCoverage(lat, lng, null) : null;
+    const tenderP = (driveMode || coordCoverage === false) ? null
+      : geoP.then((addr) => (inCoverage(lat, lng, addr) ? matchTender(addr) : null)).catch(() => null);
     const detectPrompt = DETECT_PROMPT + (LANG() === "kn"
       ? "\n- Write the description field in formal Kannada (ಕನ್ನಡ ಭಾಷೆಯಲ್ಲಿ ಬರೆಯಿರಿ)."
       : "");
@@ -459,16 +482,23 @@ ${S.name}`;
 
     if (accepted) progress(pmsg("finalize"));
     const address = accepted ? await geoP : null;
-    const [officerName, officerEmail] = accepted ? routeOfficer(address) : [null, null];
-    const tender = accepted ? await (tenderP || matchTender(address).catch(() => null)) : null;
+    const covered = accepted && (coordCoverage !== null ? coordCoverage : inCoverage(lat, lng, address));
+    const [officerName, officerEmail] = accepted ? routeOfficer(address, covered) : [null, null];
+    const tender = accepted && covered
+      ? await (tenderP || matchTender(address).catch(() => null))
+      : null;
     if (accepted) progress(pmsg("write"));
-    const [subject, body] = accepted ? draftEmail(a, lat, lng, address, officerName, tender) : [null, null];
+    // No authority means no complaint. The photo, verdict and location are still kept,
+    // so nothing is lost if coverage later extends to this place.
+    const [subject, body] = accepted && covered
+      ? draftEmail(a, lat, lng, address, officerName, tender)
+      : [null, null];
 
     const rec = {
       created_at: Date.now() / 1000, lat, lng, address, photo: dataUrl,
       is_pothole: a.is_pothole ? 1 : 0, size: a.size, confidence: a.confidence,
       description: a.description, email_subject: subject, email_body: body,
-      status: accepted ? "draft" : "rejected",
+      status: accepted ? (covered ? "draft" : "unrouted") : "rejected",
       officer_name: officerName, officer_email: officerEmail,
       tender_number: tender ? tender.tender_number : null,
       contractor: tender ? tender.contractor : null,
@@ -494,7 +524,11 @@ ${S.name}`;
 
   async function openInGmail(rec) {
     // Always the routed officer. The app never sends; the user does, in their email app.
-    const to = rec.officer_email || HQ[1];
+    // No fallback recipient: an unrouted report must not borrow Bengaluru's address.
+    if (!rec.officer_email) {
+      throw new Error("No responsible authority is known for this location, so there is nobody to address.");
+    }
+    const to = rec.officer_email;
     progress(pmsg("email"));
     if (NATIVE) {
       // Vanilla-JS WebView: the injected runtime exposes plugins via Capacitor.Plugins
@@ -536,6 +570,9 @@ ${S.name}`;
     if ((m = path.match(/^\/api\/reports\/(\d+)\/send$/)) && method === "POST") {
       const rec = await getReport(m[1]);
       if (!rec) throw new Error("Report not found.");
+      if (rec.status === "unrouted") {
+        throw new Error("This pothole is outside the area this app covers, so there is no authority to address.");
+      }
       // "queued" stays reopenable: canceling the Gmail composer must not strand the report.
       if (rec.status !== "draft" && rec.status !== "queued") throw new Error("This report is not a sendable draft.");
       return openInGmail(rec);
