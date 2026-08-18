@@ -431,11 +431,11 @@ async function sendReport(r) {
 }
 
 // ---------- Drive Mode ----------
-const FRAME_INTERVAL_MS = 1200;
+const FRAME_INTERVAL_MS = 400;   // the loop polls often; distance below decides when to shoot
 const MIN_MOVE_METERS = 8;
 const STILL_CAPTURE_MS = 8000; // capture at least this often even when not moving
 const GPS_MAX_AGE_MS = 10000; // a fix older than this is stale: pause rather than mistag
-const MAX_IN_FLIGHT = 3;
+const MAX_IN_FLIGHT = 4;
 let drive = null;
 let driveStarting = false;
 
@@ -460,7 +460,7 @@ async function startDrive() {
     });
   } catch (e) { driveStarting = false; alert(t("camera_failed") + e.message); return; }
   $("driveVideo").srcObject = stream;
-  drive = { stream, pos: null, lastCapPos: null, checked: 0, found: 0, inFlight: 0, errors: 0, wakeLock: null, foundSpots: [], sessionId: String(Date.now()), startedAt: Date.now(), imageCapture: null, stillFailed: false, stillBusy: false };
+  drive = { stream, pos: null, lastCapPos: null, tally: { checked: 0, found: 0 }, pending: [], inFlight: 0, errors: 0, wakeLock: null, foundSpots: [], sessionId: String(Date.now()), startedAt: Date.now(), imageCapture: null, stillFailed: false, stillBusy: false };
   try {
     if (window.ImageCapture) drive.imageCapture = new ImageCapture(stream.getVideoTracks()[0]);
   } catch (e) {}
@@ -478,10 +478,10 @@ async function startDrive() {
 
 function updateHud(status) {
   if (!drive) return;
-  $("driveCount").textContent = drive.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: drive.found });
+  $("driveCount").textContent = drive.tally.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: drive.tally.found });
   const mode = drive.imageCapture && !drive.stillFailed ? "stills" : "preview";
   $("driveStatus").textContent = status ||
-    t("scanning", { mode, checked: drive.checked, analyzing: drive.inFlight ? t("analyzing_suffix", { n: drive.inFlight }) : "" });
+    t("scanning", { mode, checked: drive.tally.checked, analyzing: drive.inFlight ? t("analyzing_suffix", { n: drive.inFlight }) : "" });
 }
 
 const withTimeout = (p, ms) =>
@@ -499,19 +499,6 @@ function grabPreview(video) {
   return new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.9));
 }
 
-// Capped at the evidence ceiling rather than the detection size: a full-sensor still
-// can be 17 MB, and decoding several of those at once mid-drive is how a phone runs
-// out of memory.
-async function rescaleBlob(blob, maxDim) {
-  const bmp = await createImageBitmap(blob, { imageOrientation: "from-image" });
-  const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bmp.width * scale);
-  canvas.height = Math.round(bmp.height * scale);
-  canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  return new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.92));
-}
-
 async function captureFrame(video) {
   // Prefer a true camera still (sharp, photo-grade exposure). Any failure
   // permanently falls back to preview grabs for this drive, so the worst
@@ -519,8 +506,11 @@ async function captureFrame(video) {
   if (drive && drive.imageCapture && !drive.stillFailed) {
     try {
       const still = await withTimeout(drive.imageCapture.takePhoto(), 2500);
-      const out = await rescaleBlob(still, 4000);
-      if (out) return out;
+      // Straight through. Resizing here cost a full decode, resize and re-encode of a
+      // large still inside the serialised capture window, on every frame, when only
+      // confirmed potholes ever need the big copy. That was road coverage paid for
+      // nothing: the engine makes its own small working copy anyway.
+      if (still) return still;
       drive.stillFailed = true;
     } catch (e) {
       if (drive) drive.stillFailed = true;
@@ -566,11 +556,14 @@ async function driveTick() {
   updateHud();
   // Fire and track: up to MAX_IN_FLIGHT frames analyze concurrently so road
   // coverage is no longer limited by one analysis round-trip at a time.
-  api("/api/frame", { method: "POST", body: fd })
+  // tally and spots are captured by reference so a frame that lands after Stop
+  // is still counted: the report is saved either way, and the summary must say so.
+  const tally = drive.tally, spots = drive.foundSpots;
+  const p = api("/api/frame", { method: "POST", body: fd })
     .then((res) => {
-      if (!drive) return;
-      drive.checked++; drive.errors = 0;
-      if (res.found) { drive.found++; drive.foundSpots.push(pos); }
+      tally.checked++;
+      if (drive) drive.errors = 0;
+      if (res.found) { tally.found++; spots.push(pos); }
     })
     .catch((e) => {
       if (!drive) return;
@@ -579,14 +572,15 @@ async function driveTick() {
       if (drive.errors >= 5) { const msg = e.message; stopDrive(); alert(t("drive_stopped") + msg); }
     })
     .finally(() => { if (drive) { drive.inFlight--; updateHud(); } });
+  drive.pending.push(p);
 }
 
 function stopDrive() {
   if (!drive) return;
-  const summary = drive.found === 0
-    ? t("drive_end_zero", { checked: drive.checked, debug: localStorage.getItem("debug_mode") === "1" ? t("debug_saved_suffix") : "" })
-    : t("drive_end", { found: drive.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: drive.found }), checked: drive.checked });
-  const hadActivity = drive.checked > 0 || drive.found > 0 || drive.inFlight > 0;
+  // Frames already sent are not cancelled: those reports get saved regardless.
+  // So the summary waits for them, or it would under-report the last stretch of road.
+  const tally = drive.tally, pending = drive.pending.slice();
+  const hadActivity = tally.checked > 0 || tally.found > 0 || drive.inFlight > 0;
   clearInterval(drive.timer);
   navigator.geolocation.clearWatch(drive.watchId);
   if (drive.wakeLock) drive.wakeLock.release().catch(() => {});
@@ -594,7 +588,15 @@ function stopDrive() {
   drive = null;
   show("home");
   loadReports();
-  if (hadActivity) setTimeout(() => alert(summary), 150);
+  if (!hadActivity) return;
+  const finish = () => {
+    loadReports();
+    const summary = tally.found === 0
+      ? t("drive_end_zero", { checked: tally.checked, debug: localStorage.getItem("debug_mode") === "1" ? t("debug_saved_suffix") : "" })
+      : t("drive_end", { found: tally.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: tally.found }), checked: tally.checked });
+    setTimeout(() => alert(summary), 150);
+  };
+  Promise.allSettled(pending).then(finish);
 }
 
 $("driveBtn").onclick = startDrive;
