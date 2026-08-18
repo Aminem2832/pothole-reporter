@@ -506,10 +506,7 @@ ${S.name}`;
     const a = await analyzeImage(dataUrl, detectPrompt, "assessment", ASSESS_SCHEMA, MODEL,
       driveMode ? null : emitVerdict);
     const accepted = a.is_pothole && a.confidence >= MIN_CONFIDENCE;
-    if (driveMode && !accepted) {
-      if (S.debug) await saveDebugFrame(dataUrl, lat, lng, `Debug frame: analyzed, no pothole confirmed (${Math.round(a.confidence * 100)}%). ${a.description}`, a.confidence, driveId);
-      return { found: false };
-    }
+    if (driveMode && !accepted) return { found: false };
 
     if (accepted) progress(pmsg("finalize"));
     const address = accepted ? await geoP : null;
@@ -545,17 +542,6 @@ ${S.name}`;
     return driveMode ? { found: true, report: toDict(rec) } : toDict(rec);
   }
 
-  async function saveDebugFrame(dataUrl, lat, lng, description, confidence = 0, driveId = null) {
-    const rec = {
-      created_at: Date.now() / 1000, lat, lng, address: null, photo: dataUrl,
-      is_pothole: 0, size: null, confidence, description,
-      email_subject: null, email_body: null, status: "rejected",
-      officer_name: null, officer_email: null,
-      tender_number: null, contractor: null, tender_note: null, sent_at: null,
-      drive_id: driveId,
-    };
-    rec.id = await addReport(rec);
-  }
 
   async function openInGmail(rec) {
     // Always the routed officer. The app never sends; the user does, in their email app.

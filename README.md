@@ -22,6 +22,46 @@ Karnataka is on the roadmap below.
 Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw),
 which you can open and change at [excalidraw.com](https://excalidraw.com).
 
+## What it actually catches
+
+This is a real photo taken with the app, and the real output it produced. Nothing
+here is illustrative: the verdict, the routed officer and the contract were all
+resolved by the pipeline on the phone.
+
+<img src="docs/example-pothole.jpg" width="380" alt="Pothole on 17th Main Road, HSR Layout, Bengaluru">
+
+| | |
+|---|---|
+| Verdict | **medium pothole**, confidence 0.78 |
+| Description | Two medium-sized potholes (approx. 30–60 cm) on the near center-right lane of the road; uneven surface may cause hazard to two-wheelers. |
+| Address | 17th Main Road, Sector 3, HSR Layout, Bengaluru South City Corporation, Bengaluru, Bangalore South, Bengaluru Urban, Karnataka, 560102, India |
+| Routed to | Commissioner, Bengaluru South City Corporation (BSCC) |
+| Probable contract | `BBMP/2024-25/RD/WORK_INDENT3877` |
+| Contractor | SHARANAPPA SANGAMESH( SANGAMESH INFRASTRUCTURE INDIA PRIVATE LIMITED ) |
+
+The complaint it drafted, which the app opens in your email app for you to send:
+
+```text
+Dear Commissioner, Bengaluru South City Corporation (BSCC),
+
+I would like to report a pothole that needs urgent repair.
+
+Location: 17th Main Road, Sector 3, HSR Layout, Bengaluru South City Corporation, Bengaluru, Bangalore South, Bengaluru Urban, Karnataka, 560102, India
+Coordinates: 12.911500, 77.642700
+Map link: https://maps.google.com/?q=12.911500,77.642700
+Approximate size: medium
+Details: Two medium-sized potholes (approx. 30–60 cm) on the near center-right lane of the road; uneven surface may cause hazard to two-wheelers.
+
+A photograph of the pothole is attached to this email. This pothole poses a danger to two wheeler riders and other road users. I request the city corporation to inspect and repair it at the earliest, and to route it to the contractor responsible if this road section is still under a maintenance warranty. I am also filing this grievance on Sahaaya so it can be tracked to resolution.
+
+Public procurement records indicate this road stretch probably falls under tender BBMP/2024-25/RD/WORK_INDENT3877 ("Pothole Filling Works under Maintenance Works in Ward No. 221-HSR Layout for the year 2024-25 in Bommanahalli Division."), awarded on 13-09-2024 to SHARANAPPA SANGAMESH( SANGAMESH INFRASTRUCTURE INDIA PRIVATE LIMITED ), and is possibly still within the maintenance period. If the defect liability or maintenance period is in force, I request that the repair be carried out by the contractor at no additional cost to the corporation. This is a probable record match; kindly verify against the tender documents.
+
+Thank you for your service to the city.
+
+Regards,
+Gaurav Sen
+```
+
 ## Install and set up (2 minutes)
 
 1. Download `PotholeReporter.apk` from the
@@ -37,9 +77,9 @@ The complaint email, including the AI-written description, is drafted in the
 selected language.
 
 Settings (gear icon) also has:
-- **Debug mode:** keep every Drive Mode frame the AI check rejected, as
-  reviewable entries with the confidence and the reason. Use it to diagnose
-  missed potholes; frames add up, so clear them afterwards.
+- **Debug mode:** keep the recorded video of a drive after its footage has been
+  analysed, instead of deleting it. Use it to diagnose missed potholes, since the
+  video holds every frame rather than the ones the live pass happened to sample.
 - **Delete all reports and photos:** wipes the on-device store.
 - **Review and label frames:** step through captured frames and mark each one
   pothole or not a pothole. The model's own verdict is shown after the photo, so
@@ -65,9 +105,11 @@ every 0.4 s and captures whenever you have covered 8 m, with up to 4 frames
 analyzed concurrently, each by a single `gpt-5-mini` call. (A cheaper `gpt-5-nano`
 pre-screen used to run first; an eval showed it rejected most real potholes
 before the main model ever saw them, so it was removed.)
-Frames are true camera stills via `ImageCapture.takePhoto()` where
-the device supports it (sharper, photo-grade exposure; the HUD shows
-"stills"), with automatic per-drive fallback to preview grabs ("preview"). Between 7 PM and 5 AM frames get an automatic brightness and
+Frames are read straight off the live preview at its full resolution.
+`ImageCapture.takePhoto()` used to be used instead, but it reconfigures the
+capture session on every shot, which stutters the preview once a recorder shares
+the camera, and it bought nothing: the preview is already 1920 wide, the size the
+model is sent. Between 7 PM and 5 AM frames get an automatic brightness and
 contrast boost. Sightings within 15 m of a confirmed pothole dedupe. The Stop
 button sits on top of the video, the hardware back button also stops the
 drive, and every drive ends with an explicit summary, including "No potholes
@@ -80,8 +122,16 @@ you drive, and the footage keeps the road you covered between frames. Afterwards
 expand the drive in history and tap **Analyse footage** to pull frames back out at
 a chosen spacing and run them through the same pipeline. Positions come from a
 timestamped GPS track recorded alongside, and results dedupe against what the
-live pass already found. **Delete footage** frees the space; roughly 18 MB per
-minute, so budget about 500 MB for a half-hour drive.
+live pass already found. A drive offers this as soon as it ends, which is when the
+footage is worth the most.
+
+**What is kept.** Frames the AI rejected are never stored: the footage already
+holds every frame, so keeping the rejects as separate images filled the device for
+nothing. Confirmed potholes are kept as photos. The video itself is deleted once
+its footage has been analysed, freeing the space, unless **Debug mode** is on, in
+which case the video is kept too. Declining the analysis keeps the video, since it
+is then the only copy of the road you covered. Recording runs about 18 MB per
+minute, so a half-hour drive is roughly 500 MB before it is processed away.
 
 The clips are re-analysable, which is the real reason to keep them: when
 detection improves, old drives can be re-run, where discarded frames are gone.

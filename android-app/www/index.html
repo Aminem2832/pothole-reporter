@@ -200,6 +200,9 @@ const I18N = {
     analysing: "Frame {i} of {n} &middot; {found} new",
     analyse_done: "Footage analysed: {found} new potholes from {n} frames.",
     analyse_none: "No footage stored for this drive.",
+    footage_freed: "Video deleted, {mb} MB freed.",
+    footage_kept: "Video kept (debug mode).",
+    offer_analyse: "Analyse this drive's video now? {clips} clips, {mb} MB. Potholes are kept as photos; the rest is discarded.",
     confirm_delete_footage: "Delete the recorded video for this drive? The reports stay.",
     drive_group: "{date} &middot; {found} &middot; {checked} frames checked",
     drive_group_partial: "{date} &middot; {found} &middot; {kept} kept",
@@ -275,6 +278,9 @@ const I18N = {
     analysing: "ಫ್ರೇಮ್ {i}/{n} &middot; {found} ಹೊಸ",
     analyse_done: "ವಿಶ್ಲೇಷಣೆ ಮುಗಿಯಿತು: {n} ಫ್ರೇಮ್‌ಗಳಿಂದ {found} ಹೊಸ ಗುಂಡಿಗಳು.",
     analyse_none: "ಈ ಡ್ರೈವ್‌ಗೆ ವಿಡಿಯೋ ಇಲ್ಲ.",
+    footage_freed: "ವಿಡಿಯೋ ಅಳಿಸಲಾಗಿದೆ, {mb} MB ಮುಕ್ತ.",
+    footage_kept: "ವಿಡಿಯೋ ಉಳಿಸಲಾಗಿದೆ (ಡೀಬಗ್ ಮೋಡ್).",
+    offer_analyse: "ಈ ಡ್ರೈವ್‌ನ ವಿಡಿಯೋ ಈಗ ವಿಶ್ಲೇಷಿಸಬೇಕೆ? {clips} ತುಣುಕುಗಳು, {mb} MB. ಗುಂಡಿಗಳು ಫೋಟೋಗಳಾಗಿ ಉಳಿಯುತ್ತವೆ, ಉಳಿದವು ಅಳಿಸಲಾಗುತ್ತದೆ.",
     confirm_delete_footage: "ಈ ಡ್ರೈವ್‌ನ ವಿಡಿಯೋ ಅಳಿಸಬೇಕೆ? ವರದಿಗಳು ಉಳಿಯುತ್ತವೆ.",
     drive_group: "{date} &middot; {found} &middot; {checked} ಫ್ರೇಮ್ ಪರಿಶೀಲನೆ",
     drive_group_partial: "{date} &middot; {found} &middot; {kept} ಉಳಿಸಲಾಗಿದೆ",
@@ -657,10 +663,7 @@ async function startDrive() {
     });
   } catch (e) { driveStarting = false; alert(t("camera_failed") + e.message); return; }
   $("driveVideo").srcObject = stream;
-  drive = { stream, pos: null, lastCapPos: null, tally: { checked: 0, found: 0 }, pending: [], inFlight: 0, errors: 0, wakeLock: null, foundSpots: [], sessionId: String(Date.now()), startedAt: Date.now(), imageCapture: null, stillFailed: false, stillBusy: false };
-  try {
-    if (window.ImageCapture) drive.imageCapture = new ImageCapture(stream.getVideoTracks()[0]);
-  } catch (e) {}
+  drive = { stream, pos: null, lastCapPos: null, tally: { checked: 0, found: 0 }, pending: [], inFlight: 0, errors: 0, wakeLock: null, foundSpots: [], sessionId: String(Date.now()), startedAt: Date.now(), stillBusy: false };
   startRecording(stream, drive.sessionId);
   try { drive.wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
   drive.watchId = navigator.geolocation.watchPosition(
@@ -683,9 +686,8 @@ async function startDrive() {
 function updateHud(status) {
   if (!drive) return;
   $("driveCount").textContent = drive.tally.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: drive.tally.found });
-  const mode = drive.imageCapture && !drive.stillFailed ? "stills" : "preview";
   $("driveStatus").textContent = status ||
-    t("scanning", { mode, checked: drive.tally.checked, analyzing: drive.inFlight ? t("analyzing_suffix", { n: drive.inFlight }) : "" })
+    t("scanning", { mode: "live", checked: drive.tally.checked, analyzing: drive.inFlight ? t("analyzing_suffix", { n: drive.inFlight }) : "" })
       + (recCtx && !recCtx.failed
           ? " " + t("rec_suffix", { mb: (recCtx.bytes / 1048576).toFixed(0) })
           : (recCtx && recCtx.failed ? " " + t("rec_failed") : ""));
@@ -699,30 +701,15 @@ const withTimeout = (p, ms) =>
 // copy attached to a complaint stays what the camera actually saw.
 function grabPreview(video) {
   const canvas = document.createElement("canvas");
-  const scale = Math.min(1, 1280 / video.videoWidth);
-  canvas.width = Math.round(video.videoWidth * scale);
-  canvas.height = Math.round(video.videoHeight * scale);
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
   canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
   return new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.9));
 }
 
-async function captureFrame(video) {
-  // Prefer a true camera still (sharp, photo-grade exposure). Any failure
-  // permanently falls back to preview grabs for this drive, so the worst
-  // case is exactly the old behavior.
-  if (drive && drive.imageCapture && !drive.stillFailed) {
-    try {
-      const still = await withTimeout(drive.imageCapture.takePhoto(), 2500);
-      // Straight through. Resizing here cost a full decode, resize and re-encode of a
-      // large still inside the serialised capture window, on every frame, when only
-      // confirmed potholes ever need the big copy. That was road coverage paid for
-      // nothing: the engine makes its own small working copy anyway.
-      if (still) return still;
-      drive.stillFailed = true;
-    } catch (e) {
-      if (drive) drive.stillFailed = true;
-    }
-  }
+// One cheap read of the frame the preview is already showing. No capture-session
+// reconfiguration, so the video feed keeps running smoothly while we sample it.
+function captureFrame(video) {
   return grabPreview(video);
 }
 
@@ -810,7 +797,17 @@ function stopDrive() {
     const summary = tally.found === 0
       ? t("drive_end_zero", { checked: tally.checked, debug: localStorage.getItem("debug_mode") === "1" ? t("debug_saved_suffix") : "" })
       : t("drive_end", { found: tally.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: tally.found }), checked: tally.checked });
-    setTimeout(() => alert(summary), 150);
+    setTimeout(async () => {
+      alert(summary);
+      const mine = (await api("/api/footage").catch(() => []))
+        .find((f) => String(f.drive_id) === String(sessionId));
+      if (!mine) return;
+      const ask = t("offer_analyse", { mb: (mine.bytes / 1048576).toFixed(0), clips: mine.segments });
+      if (!confirm(ask)) return;   // declining keeps the footage: it is the only copy
+      const rec = (await api("/api/drives").catch(() => []))
+        .find((d) => String(d.id) === String(sessionId));
+      analyseFootage(sessionId, rec);
+    }, 150);
   };
   Promise.allSettled(pending).then(finish);
 }
@@ -844,6 +841,8 @@ let reviewQueue = [], reviewDone = 0;
 // Restarting the recorder every SEGMENT_MS gives self-contained, seekable clips and
 // flat memory, costing a few tens of milliseconds at each boundary. WebM does stream,
 // but a mid-stream WebM chunk carries no headers, so it cannot be seeked on its own.
+const isDebug = () => localStorage.getItem("debug_mode") === "1";
+
 let recCtx = null;
 
 function startRecording(stream, driveId) {
@@ -1071,9 +1070,24 @@ async function analyseFootage(driveId, driveRec) {
   }
 
   await Promise.allSettled(pending);
+  // Retention: potholes are kept as stills either way, rejected frames were never
+  // stored, and the footage itself only survives in debug mode. Deleting it is safe
+  // precisely because the analysis that just ran is what extracted everything wanted.
+  let freed = 0;
+  if (!isDebug()) {
+    try {
+      const before = (await api("/api/footage").catch(() => []))
+        .filter((f) => String(f.drive_id) === String(driveId))
+        .reduce((n, f) => n + f.bytes, 0);
+      await api(`/api/footage/${encodeURIComponent(driveId)}`, { method: "DELETE" });
+      freed = before / 1048576;
+    } catch (e) {}
+  }
   await loadReports();
   show("home");
-  alert(t("analyse_done", { found, n: planned }));
+  alert(t("analyse_done", { found, n: planned })
+        + (freed ? " " + t("footage_freed", { mb: freed.toFixed(0) })
+                 : (isDebug() ? " " + t("footage_kept") : "")));
 }
 
 // ---------- contribution dashboard ----------
