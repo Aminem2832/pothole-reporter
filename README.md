@@ -73,6 +73,19 @@ button sits on top of the video, the hardware back button also stops the
 drive, and every drive ends with an explicit summary, including "No potholes
 found in this drive (N frames checked)" when it comes up empty.
 
+**Continuous recording.** A drive also records video, in self-contained clips
+written straight to device storage so memory stays flat. Capture therefore never
+depends on picking the right interval: the live pass still drafts complaints as
+you drive, and the footage keeps the road you covered between frames. Afterwards,
+expand the drive in history and tap **Analyse footage** to pull frames back out at
+a chosen spacing and run them through the same pipeline. Positions come from a
+timestamped GPS track recorded alongside, and results dedupe against what the
+live pass already found. **Delete footage** frees the space; roughly 18 MB per
+minute, so budget about 500 MB for a half-hour drive.
+
+The clips are re-analysable, which is the real reason to keep them: when
+detection improves, old drives can be re-run, where discarded frames are gone.
+
 **Review and send.** Every confirmed pothole is an editable draft. The
 "Email" button opens your email app pre-filled: recipient, subject, body,
 photo attached. You press send there. Canceling the composer leaves the

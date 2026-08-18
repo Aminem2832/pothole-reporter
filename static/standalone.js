@@ -397,7 +397,7 @@ ${S.name}`;
   function idb() {
     return new Promise((resolve, reject) => {
       if (_db) return resolve(_db);
-      const req = indexedDB.open("potholes", 2);
+      const req = indexedDB.open("potholes", 3);
       req.onupgradeneeded = () => {
         const d = req.result;
         if (!d.objectStoreNames.contains("reports")) d.createObjectStore("reports", { keyPath: "id", autoIncrement: true });
@@ -405,6 +405,12 @@ ${S.name}`;
         // rejected frames are not kept unless debug mode is on, so the count has to
         // be recorded at the end or it is lost.
         if (!d.objectStoreNames.contains("drives")) d.createObjectStore("drives", { keyPath: "id" });
+        // Continuous footage: capture stops guessing an interval, and a drive can be
+        // re-analysed later, more densely or by a better model. Discarded frames are gone.
+        if (!d.objectStoreNames.contains("footage")) {
+          const f = d.createObjectStore("footage", { keyPath: "key" });
+          f.createIndex("by_drive", "drive_id");
+        }
       };
       req.onsuccess = () => { _db = req.result; resolve(_db); };
       req.onerror = () => reject(req.error);
@@ -424,6 +430,9 @@ ${S.name}`;
   const addReport = (r) => op("readwrite", (s) => s.add(r));
   const delReport = (id) => op("readwrite", (s) => s.delete(Number(id)));
   const allDrives = () => op("readonly", (s) => s.getAll(), "drives");
+  const putFootage = (seg) => op("readwrite", (s) => s.put(seg), "footage");
+  const footageFor = (driveId) => op("readonly", (s) => s.index("by_drive").getAll(String(driveId)), "footage");
+  const allFootage = () => op("readonly", (s) => s.getAll(), "footage");
   const putDrive = (d) => op("readwrite", (s) => s.put(d), "drives");
 
   const toDict = (r) => ({ ...r, photo_url: r.photo });
@@ -460,7 +469,9 @@ ${S.name}`;
     const driveId = driveMode ? (fd.get("drive_id") || null) : null;
 
     if (driveMode && lat != null) {
-      const cutoff = Date.now() / 1000 - DEDUPE_WINDOW_S;
+      // Footage analysed hours later must still dedupe against what the live pass
+      // already found on that drive, so the caller can drop the time window.
+      const cutoff = fd.get("dedupe_all") ? 0 : Date.now() / 1000 - DEDUPE_WINDOW_S;
       for (const r of await allReports()) {
         if ((r.status === "draft" || r.status === "queued" || r.status === "sent" || r.status === "unrouted") && r.lat != null &&
             r.created_at > cutoff && distMeters(lat, lng, r.lat, r.lng) < DEDUPE_RADIUS_M) {
@@ -676,14 +687,46 @@ ${S.name}`;
     if (path === "/api/reports" && method === "DELETE") {
       await op("readwrite", (s) => s.clear());
       await op("readwrite", (s) => s.clear(), "drives");
+      await op("readwrite", (s) => s.clear(), "footage");
       return { ok: true };
     }
     if (path === "/api/drives" && method === "GET") return allDrives();
+    if (path === "/api/footage" && method === "POST") {
+      const fd = opts.body;
+      const blob = fd.get("segment"), driveId = String(fd.get("drive_id"));
+      const seq = parseInt(fd.get("seq"), 10) || 0;
+      if (!blob || !blob.size) throw new Error("Empty footage segment.");
+      await putFootage({ key: `${driveId}#${String(seq).padStart(5, "0")}`, drive_id: driveId,
+                         seq, blob, mime: blob.type || "video/mp4", bytes: blob.size,
+                         at: Date.now() / 1000 });
+      return { ok: true, bytes: blob.size };
+    }
+    // Summaries only: the caller asks for the blobs separately, because a drive's
+    // footage is hundreds of megabytes and must never be materialised by accident.
+    if (path === "/api/footage" && method === "GET") {
+      const byDrive = {};
+      for (const f of await allFootage()) {
+        const d = byDrive[f.drive_id] || (byDrive[f.drive_id] = { drive_id: f.drive_id, segments: 0, bytes: 0, mime: f.mime });
+        d.segments++; d.bytes += f.bytes;
+      }
+      return Object.values(byDrive);
+    }
+    if ((m = path.match(/^\/api\/footage\/([^/]+)\/blobs$/)) && method === "GET") {
+      const segs = (await footageFor(decodeURIComponent(m[1]))).sort((a, b) => a.seq - b.seq);
+      if (!segs.length) throw new Error("No footage stored for that drive.");
+      return { mime: segs[0].mime, blobs: segs.map((x) => x.blob) };
+    }
+    if ((m = path.match(/^\/api\/footage\/([^/]+)$/)) && method === "DELETE") {
+      const id = decodeURIComponent(m[1]);
+      for (const f of await footageFor(id)) await op("readwrite", (s) => s.delete(f.key), "footage");
+      return { ok: true };
+    }
     if (path === "/api/drives" && method === "POST") {
       const d = JSON.parse(opts.body);
       if (!d || !d.id) throw new Error("Drive id missing.");
       await putDrive({ id: String(d.id), started_at: d.started_at || null,
-                       ended_at: Date.now() / 1000, checked: d.checked | 0, found: d.found | 0 });
+                       ended_at: Date.now() / 1000, checked: d.checked | 0, found: d.found | 0,
+                       gps_track: Array.isArray(d.gps_track) ? d.gps_track : [] });
       return { ok: true };
     }
     if (path === "/api/export" && method === "POST") return exportDataset();

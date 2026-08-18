@@ -170,6 +170,13 @@ const I18N = {
     chip_unrouted: "Outside coverage",
     review_btn: "Review and label frames", export_btn: "Export labelled dataset",
     zoom_hint: "Pinch to zoom &middot; drag to pan &middot; double tap to reset",
+    rec_suffix: "&middot; recording {mb} MB", rec_failed: "&middot; not recording",
+    footage_line: "Footage: {mb} MB &middot; {segments} clips",
+    analyse_btn: "Analyse footage", delete_footage: "Delete footage",
+    analysing: "Frame {i} of {n} &middot; {found} new",
+    analyse_done: "Footage analysed: {found} new potholes from {n} frames.",
+    analyse_none: "No footage stored for this drive.",
+    confirm_delete_footage: "Delete the recorded video for this drive? The reports stay.",
     drive_group: "{date} &middot; {found} &middot; {checked} frames checked",
     drive_group_partial: "{date} &middot; {found} &middot; {kept} kept",
     lbl_yes: "Pothole", lbl_no: "Not a pothole", lbl_skip: "Skip", lbl_done: "Done",
@@ -231,6 +238,13 @@ const I18N = {
     chip_unrouted: "ವ್ಯಾಪ್ತಿಯ ಹೊರಗೆ",
     review_btn: "ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಗುರುತಿಸಿ", export_btn: "ಗುರುತಿಸಿದ ಡೇಟಾಸೆಟ್ ರಫ್ತು ಮಾಡಿ",
     zoom_hint: "ಜೂಮ್‌ಗೆ ಪಿಂಚ್ &middot; ಸರಿಸಲು ಎಳೆಯಿರಿ &middot; ಮರುಹೊಂದಿಸಲು ಡಬಲ್ ಟ್ಯಾಪ್",
+    rec_suffix: "&middot; {mb} MB ರೆಕಾರ್ಡ್", rec_failed: "&middot; ರೆಕಾರ್ಡ್ ಆಗುತ್ತಿಲ್ಲ",
+    footage_line: "ವಿಡಿಯೋ: {mb} MB &middot; {segments} ತುಣುಕುಗಳು",
+    analyse_btn: "ವಿಡಿಯೋ ವಿಶ್ಲೇಷಿಸಿ", delete_footage: "ವಿಡಿಯೋ ಅಳಿಸಿ",
+    analysing: "ಫ್ರೇಮ್ {i}/{n} &middot; {found} ಹೊಸ",
+    analyse_done: "ವಿಶ್ಲೇಷಣೆ ಮುಗಿಯಿತು: {n} ಫ್ರೇಮ್‌ಗಳಿಂದ {found} ಹೊಸ ಗುಂಡಿಗಳು.",
+    analyse_none: "ಈ ಡ್ರೈವ್‌ಗೆ ವಿಡಿಯೋ ಇಲ್ಲ.",
+    confirm_delete_footage: "ಈ ಡ್ರೈವ್‌ನ ವಿಡಿಯೋ ಅಳಿಸಬೇಕೆ? ವರದಿಗಳು ಉಳಿಯುತ್ತವೆ.",
     drive_group: "{date} &middot; {found} &middot; {checked} ಫ್ರೇಮ್ ಪರಿಶೀಲನೆ",
     drive_group_partial: "{date} &middot; {found} &middot; {kept} ಉಳಿಸಲಾಗಿದೆ",
     lbl_yes: "ಗುಂಡಿ", lbl_no: "ಗುಂಡಿ ಅಲ್ಲ", lbl_skip: "ಬಿಟ್ಟುಬಿಡಿ", lbl_done: "ಮುಗಿಯಿತು",
@@ -348,9 +362,12 @@ async function loadReports() {
         <div class="meta">${fmtDate(r.created_at)}${r.address ? " &middot; " + r.address.split(",").slice(0, 2).join(", ") : ""}</div>
       </div>
     </div>`;
-  const drives = await api("/api/drives").catch(() => []);
-  const driveById = {};
+  const [drives, footage] = await Promise.all([
+    api("/api/drives").catch(() => []), api("/api/footage").catch(() => []),
+  ]);
+  const driveById = {}, footageById = {};
   for (const d of drives) driveById[String(d.id)] = d;
+  for (const f of footage) footageById[String(f.drive_id)] = f;
   // Group consecutive records from the same drive session under one header.
   const groups = [];
   for (const r of reports) {
@@ -372,14 +389,34 @@ async function loadReports() {
       ? t("drive_group", { date: fmtDate(start), found: foundTxt, checked: rec.checked })
       : t("drive_group_partial", { date: fmtDate(start), found: foundTxt, kept: g.items.length });
     const open = expandedDrives.has(String(g.driveId));
+    const fo = footageById[String(g.driveId)];
+    const footageRow = (open && fo) ? `<div class="card" style="padding:10px 12px">
+        <div class="meta">${t("footage_line", { mb: (fo.bytes / 1048576).toFixed(0), segments: fo.segments })}</div>
+        <div class="btn-row" style="margin-top:8px">
+          <button class="ghost" data-analyse="${g.driveId}">${t("analyse_btn")}</button>
+          <button class="ghost danger" data-delfootage="${g.driveId}">${t("delete_footage")}</button>
+        </div>
+      </div>` : "";
     return `<div class="group-head ${open ? "open" : ""}" data-drive="${g.driveId}">
         <span class="caret">&#9656;</span><span class="meta" style="font-weight:600;color:#f2f2f4">${label}</span>
-      </div>` + (open ? cards : "");
+      </div>` + (open ? footageRow + cards : "");
   }).join("");
   for (const el of list.querySelectorAll("[data-drive]")) {
     el.onclick = () => {
       const id = el.dataset.drive;
       if (expandedDrives.has(id)) expandedDrives.delete(id); else expandedDrives.add(id);
+      loadReports();
+    };
+  }
+  for (const el of list.querySelectorAll("[data-analyse]")) {
+    el.onclick = (ev) => { ev.stopPropagation(); analyseFootage(el.dataset.analyse, driveById[el.dataset.analyse]); };
+  }
+  for (const el of list.querySelectorAll("[data-delfootage]")) {
+    el.onclick = async (ev) => {
+      ev.stopPropagation();
+      if (!confirm(t("confirm_delete_footage"))) return;
+      try { await api(`/api/footage/${encodeURIComponent(el.dataset.delfootage)}`, { method: "DELETE" }); }
+      catch (e) { alert(e.message); }
       loadReports();
     };
   }
@@ -547,6 +584,15 @@ const MIN_MOVE_METERS = 8;
 const STILL_CAPTURE_MS = 8000; // capture at least this often even when not moving
 const GPS_MAX_AGE_MS = 10000; // a fix older than this is stale: pause rather than mistag
 const MAX_IN_FLIGHT = 4;
+// Tunable at runtime so a test can use short segments and dense sampling without
+// waiting out a real drive.
+let SEGMENT_MS = 15000;            // footage is written in 15s pieces so memory stays flat
+let RECORD_BITRATE = 2_500_000;    // ~18 MB/min at 1080p
+let VOD_STEP_S = 1.0;              // frame spacing when re-analysing footage
+// Recording is what removes the guesswork: capture is continuous, and choosing how
+// densely to analyse becomes a separate, repeatable decision made afterwards.
+const RECORD_MIMES = ["video/mp4;codecs=avc1.42E01E", "video/mp4",
+                      "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
 let drive = null;
 let driveStarting = false;
 
@@ -575,9 +621,16 @@ async function startDrive() {
   try {
     if (window.ImageCapture) drive.imageCapture = new ImageCapture(stream.getVideoTracks()[0]);
   } catch (e) {}
+  startRecording(stream, drive.sessionId);
   try { drive.wakeLock = await navigator.wakeLock.request("screen"); } catch (e) {}
   drive.watchId = navigator.geolocation.watchPosition(
-    (p) => { if (drive) { drive.pos = { lat: p.coords.latitude, lng: p.coords.longitude }; drive.posAt = Date.now(); } },
+    (p) => {
+      if (!drive) return;
+      drive.pos = { lat: p.coords.latitude, lng: p.coords.longitude };
+      drive.posAt = Date.now();
+      (drive.gpsTrack || (drive.gpsTrack = [])).push(
+        [Math.round((Date.now() - drive.startedAt) / 100) / 10, +p.coords.latitude.toFixed(6), +p.coords.longitude.toFixed(6)]);
+    },
     () => {},
     { enableHighAccuracy: true, maximumAge: 2000 }
   );
@@ -592,7 +645,10 @@ function updateHud(status) {
   $("driveCount").textContent = drive.tally.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: drive.tally.found });
   const mode = drive.imageCapture && !drive.stillFailed ? "stills" : "preview";
   $("driveStatus").textContent = status ||
-    t("scanning", { mode, checked: drive.tally.checked, analyzing: drive.inFlight ? t("analyzing_suffix", { n: drive.inFlight }) : "" });
+    t("scanning", { mode, checked: drive.tally.checked, analyzing: drive.inFlight ? t("analyzing_suffix", { n: drive.inFlight }) : "" })
+      + (recCtx && !recCtx.failed
+          ? " " + t("rec_suffix", { mb: (recCtx.bytes / 1048576).toFixed(0) })
+          : (recCtx && recCtx.failed ? " " + t("rec_failed") : ""));
 }
 
 const withTimeout = (p, ms) =>
@@ -692,6 +748,8 @@ function stopDrive() {
   // So the summary waits for them, or it would under-report the last stretch of road.
   const tally = drive.tally, pending = drive.pending.slice();
   const sessionId = drive.sessionId, startedAt = drive.startedAt;
+  const gpsTrack = drive.gpsTrack || [];
+  stopRecording();   // its final clip is written after this returns
   const hadActivity = tally.checked > 0 || tally.found > 0 || drive.inFlight > 0;
   clearInterval(drive.timer);
   navigator.geolocation.clearWatch(drive.watchId);
@@ -705,7 +763,8 @@ function stopDrive() {
     // Record what the drive actually checked. Rejected frames are not stored unless
     // debug mode is on, so without this the history header can only count survivors.
     api("/api/drives", { method: "POST", body: JSON.stringify(
-      { id: sessionId, started_at: startedAt / 1000, checked: tally.checked, found: tally.found }) })
+      { id: sessionId, started_at: startedAt / 1000, checked: tally.checked, found: tally.found,
+        gps_track: gpsTrack }) })
       .catch(() => {})
       .then(loadReports);
     const summary = tally.found === 0
@@ -739,6 +798,58 @@ $("captureBtn").onclick = () => { StandaloneAPI.prewarm(); $("fileInput").click(
 // verdict is shown but deliberately after the photo, so it nudges the eye as little
 // as possible: an unlabelled frame is worth more than one labelled by suggestion.
 let reviewQueue = [], reviewDone = 0;
+
+// Rolling clips, not one long recording. MP4 is not streamable: given a timeslice it
+// emits nothing until stop, so a 30-minute drive would sit entirely in memory.
+// Restarting the recorder every SEGMENT_MS gives self-contained, seekable clips and
+// flat memory, costing a few tens of milliseconds at each boundary. WebM does stream,
+// but a mid-stream WebM chunk carries no headers, so it cannot be seeked on its own.
+let recCtx = null;
+
+function startRecording(stream, driveId) {
+  if (typeof MediaRecorder === "undefined") return;
+  const mime = RECORD_MIMES.find((t) => { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } });
+  if (!mime) return;
+  recCtx = { driveId, mime, stream, seq: 0, bytes: 0, active: true, timer: null, recorder: null, failed: false };
+  cycleClip();
+}
+
+function cycleClip() {
+  const ctx = recCtx;
+  if (!ctx || !ctx.active) return;
+  let rec;
+  try { rec = new MediaRecorder(ctx.stream, { mimeType: ctx.mime, videoBitsPerSecond: RECORD_BITRATE }); }
+  catch (e) { ctx.failed = true; return; }
+  const parts = [];
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) parts.push(e.data); };
+  rec.onstop = () => {
+    if (parts.length) saveClip(ctx, new Blob(parts, { type: ctx.mime }));
+    if (ctx.active) cycleClip();
+  };
+  ctx.recorder = rec;
+  try { rec.start(); } catch (e) { ctx.failed = true; return; }
+  ctx.timer = setTimeout(() => { try { rec.stop(); } catch (e) {} }, SEGMENT_MS);
+}
+
+// Reads only ctx, never `drive`: the final clip lands after Stop has torn the session
+// down, and losing the end of a drive is exactly the bug worth avoiding.
+function saveClip(ctx, blob) {
+  const fd = new FormData();
+  fd.append("segment", blob, "clip.bin");
+  fd.append("drive_id", ctx.driveId);
+  fd.append("seq", String(ctx.seq++));
+  api("/api/footage", { method: "POST", body: fd })
+    .then((r) => { ctx.bytes += (r && r.bytes) || 0; })
+    .catch(() => { ctx.failed = true; });
+}
+
+function stopRecording() {
+  const ctx = recCtx;
+  if (!ctx) return;
+  ctx.active = false;
+  clearTimeout(ctx.timer);
+  try { if (ctx.recorder && ctx.recorder.state !== "inactive") ctx.recorder.stop(); } catch (e) {}
+}
 const expandedDrives = new Set();
 
 async function startReview() {
@@ -846,6 +957,84 @@ function viewerStep(delta) {
   v.addEventListener("pointercancel", end);
   img.addEventListener("click", (e) => e.stopPropagation());
 })();
+
+// ---------- re-analysing recorded footage ----------
+// The point of recording: capture never had to guess an interval, so how densely to
+// analyse is decided here, afterwards, and can be redone whenever detection improves.
+function gpsAt(track, seconds) {
+  if (!track || !track.length) return null;
+  let best = track[0];
+  for (const p of track) { if (p[0] <= seconds) best = p; else break; }
+  return { lat: best[1], lng: best[2] };
+}
+
+// Clips are walked one at a time. Byte-joining separate MP4 files does not make one
+// longer video: only the first is parsed, so a naive concatenation silently analyses
+// the first few seconds of a drive and reports success.
+async function analyseFootage(driveId, driveRec) {
+  let footage;
+  try { footage = await api(`/api/footage/${encodeURIComponent(driveId)}/blobs`); }
+  catch (e) { alert(t("analyse_none")); return; }
+  if (!footage.blobs.length) { alert(t("analyse_none")); return; }
+
+  show("progress");
+  $("progressPhoto").src = "";
+  $("progressText").innerHTML = t("analysing", { i: 0, n: "?", found: 0 });
+
+  const track = (driveRec && driveRec.gps_track) || [];
+  const canvas = document.createElement("canvas");
+  const pending = [];
+  let found = 0, done = 0, planned = 0, elapsed = 0;
+
+  for (const clip of footage.blobs) {
+    const url = URL.createObjectURL(clip);
+    const v = document.createElement("video");
+    v.muted = true; v.preload = "auto"; v.src = url;
+    const meta = await new Promise((res) => {
+      v.onloadedmetadata = () => res({ dur: v.duration });
+      v.onerror = () => res({ error: true });
+    });
+    if (meta.error || !isFinite(meta.dur) || meta.dur <= 0) { URL.revokeObjectURL(url); continue; }
+
+    const grab = (at) => new Promise((res) => {
+      v.onseeked = () => {
+        const scale = Math.min(1, 2000 / Math.max(v.videoWidth, v.videoHeight));
+        canvas.width = Math.round(v.videoWidth * scale);
+        canvas.height = Math.round(v.videoHeight * scale);
+        canvas.getContext("2d").drawImage(v, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((bl) => res(bl), "image/jpeg", 0.85);
+      };
+      v.currentTime = at;
+    });
+
+    for (let at = Math.min(0.2, meta.dur / 2); at < meta.dur; at += VOD_STEP_S) {
+      planned++;
+      const blob = await grab(at);           // seeking is serial on one element
+      if (!blob) { done++; continue; }
+      const pos = gpsAt(track, elapsed + at);
+      const fd = new FormData();
+      fd.append("photo", blob, "vod.jpg");
+      if (pos) { fd.append("lat", String(pos.lat)); fd.append("lng", String(pos.lng)); }
+      fd.append("drive_id", String(driveId));
+      fd.append("dedupe_all", "1");
+      pending.push(api("/api/frame", { method: "POST", body: fd })
+        .then((r) => { if (r && r.found) found++; })
+        .catch(() => {})
+        .finally(() => {
+          done++;
+          $("progressText").innerHTML = t("analysing", { i: done, n: planned, found });
+        }));
+      if (pending.length >= MAX_IN_FLIGHT) await Promise.race(pending.splice(0, 1));
+    }
+    elapsed += meta.dur;
+    URL.revokeObjectURL(url);
+  }
+
+  await Promise.allSettled(pending);
+  await loadReports();
+  show("home");
+  alert(t("analyse_done", { found, n: planned }));
+}
 
 $("reviewBtn").onclick = startReview;
 $("reviewPhoto").onclick = () => { if (reviewQueue[0]) openViewer(reviewQueue[0]); };
