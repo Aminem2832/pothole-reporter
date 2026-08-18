@@ -135,6 +135,8 @@ const I18N = {
     size_small: "small", size_medium: "medium", size_large: "large",
     verdict_detected: "{size} pothole detected ({pct}% confident)",
     verdict_rejected: "No pothole confirmed",
+    early_yes: "Pothole confirmed. Preparing the complaint...",
+    early_no: "No pothole in this photo.",
     verdict_sent: "Complaint sent",
     verdict_queued: "Opened in your email app. Edit and resend if you didn't send it.",
     confidence: "confidence",
@@ -181,6 +183,8 @@ const I18N = {
     size_small: "ಸಣ್ಣ", size_medium: "ಮಧ್ಯಮ", size_large: "ದೊಡ್ಡ",
     verdict_detected: "{size} ಗುಂಡಿ ಪತ್ತೆಯಾಗಿದೆ ({pct}% ವಿಶ್ವಾಸ)",
     verdict_rejected: "ಗುಂಡಿ ದೃಢಪಟ್ಟಿಲ್ಲ",
+    early_yes: "ಗುಂಡಿ ದೃಢಪಟ್ಟಿದೆ. ದೂರು ಸಿದ್ಧಪಡಿಸಲಾಗುತ್ತಿದೆ...",
+    early_no: "ಈ ಫೋಟೋದಲ್ಲಿ ಗುಂಡಿ ಇಲ್ಲ.",
     verdict_sent: "ದೂರು ಕಳುಹಿಸಲಾಗಿದೆ",
     verdict_queued: "ನಿಮ್ಮ ಇಮೇಲ್ ಆ್ಯಪ್‌ನಲ್ಲಿ ತೆರೆಯಲಾಗಿದೆ. ಕಳುಹಿಸಿಲ್ಲದಿದ್ದರೆ ತಿದ್ದಿ ಮತ್ತೆ ತೆರೆಯಿರಿ.",
     confidence: "ವಿಶ್ವಾಸ",
@@ -422,6 +426,7 @@ async function startDrive() {
   // must not start a parallel drive session and leak the first camera stream.
   if (drive || driveStarting) return;
   driveStarting = true;
+  StandaloneAPI.prewarm();
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -591,13 +596,22 @@ document.addEventListener("visibilitychange", async () => {
   }
 });
 
-$("captureBtn").onclick = () => $("fileInput").click();
+// Opening the camera is the cue that a call is coming: warm the connection now
+// so the photo does not also pay for a TLS handshake.
+$("captureBtn").onclick = () => { StandaloneAPI.prewarm(); $("fileInput").click(); };
 $("fileInput").onchange = (e) => { handleFile(e.target.files[0]); e.target.value = ""; };
 
 // Live pipeline progress from the standalone engine (stage-by-stage updates).
 window.addEventListener("pipeline-progress", (e) => {
   if (!$("progress").classList.contains("hidden")) $("progressText").textContent = e.detail;
   else if (drive) $("driveStatus").textContent = e.detail;
+});
+
+// The verdict streams in ahead of the description, so say what was decided
+// while the rest of the report is still being assembled.
+window.addEventListener("pipeline-verdict", (e) => {
+  if ($("progress").classList.contains("hidden")) return;
+  $("progressText").textContent = e.detail.is_pothole ? t("early_yes") : t("early_no");
 });
 
 // Native Android back button: navigate inside the app instead of exiting.

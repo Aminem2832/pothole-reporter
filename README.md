@@ -24,9 +24,9 @@ The complaint email, including the AI-written description, is drafted in the
 selected language.
 
 Settings (gear icon) also has:
-- **Debug mode:** keep every Drive Mode frame, including screened-out and
-  rejected ones, as reviewable entries with the reason each failed. Use it to
-  diagnose missed potholes; frames add up, so clear them afterwards.
+- **Debug mode:** keep every Drive Mode frame the AI check rejected, as
+  reviewable entries with the confidence and the reason. Use it to diagnose
+  missed potholes; frames add up, so clear them afterwards.
 - **Delete all reports and photos:** wipes the on-device store.
 
 ## How it works
@@ -39,8 +39,10 @@ link, the routed commissioner, and the probable contract.
 
 **Drive Mode.** Mount the phone facing the road. While you move, frames are
 captured every 1.2 s with 10 m minimum spacing and up to 3 analyzed
-concurrently: a cheap screen (`gpt-5-nano`) first, then the main model
-confirms. Frames are true camera stills via `ImageCapture.takePhoto()` where
+concurrently, each by a single `gpt-5-mini` call. (A cheaper `gpt-5-nano`
+pre-screen used to run first; an eval showed it rejected most real potholes
+before the main model ever saw them, so it was removed.)
+Frames are true camera stills via `ImageCapture.takePhoto()` where
 the device supports it (sharper, photo-grade exposure; the HUD shows
 "stills"), with automatic per-drive fallback to preview grabs ("preview"). Between 7 PM and 5 AM frames get an automatic brightness and
 contrast boost. Sightings within 15 m of a confirmed pothole dedupe. The Stop
@@ -91,11 +93,11 @@ To refresh the dataset: update `data/tenders.csv`, run
 ## Costs
 
 Every analyzed image is an OpenAI API call on your key: one `gpt-5-mini` call
-per single shot (plus one text call when contract candidates exist), and in
-Drive Mode one `gpt-5-nano` screen per captured frame plus a `gpt-5-mini`
-confirmation for frames that pass. A typical city drive costs rupees, not
-hundreds; Debug mode does not add calls, it only stores what was already
-analyzed.
+per captured frame or photo, plus one text call to match the contract, made
+only once a pothole is confirmed. Removing the `gpt-5-nano` pre-screen bought
+recall at the price of running the main model on every frame, so a long drive
+costs more than it used to: budget rupees per drive, not paise. Debug mode
+does not add calls, it only stores what was already analyzed.
 
 ## Development
 

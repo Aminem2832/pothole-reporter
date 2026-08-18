@@ -17,17 +17,16 @@
 
   const LANG = () => (localStorage.getItem("app_lang") === "kn" ? "kn" : "en");
   const PROGRESS = {
-    en: { compress: "Compressing photo...", capture: "Capturing frame...", screen: "Quick road scan...",
+    en: { compress: "Compressing photo...", capture: "Capturing frame...",
           detect: "AI checking for potholes...", finalize: "Finalizing address and contract...",
           write: "Writing the complaint...", email: "Opening your email app..." },
-    kn: { compress: "ಫೋಟೋ ಸಂಕುಚಿಸಲಾಗುತ್ತಿದೆ...", capture: "ಫ್ರೇಮ್ ಸೆರೆಹಿಡಿಯಲಾಗುತ್ತಿದೆ...", screen: "ತ್ವರಿತ ರಸ್ತೆ ಪರಿಶೀಲನೆ...",
+    kn: { compress: "ಫೋಟೋ ಸಂಕುಚಿಸಲಾಗುತ್ತಿದೆ...", capture: "ಫ್ರೇಮ್ ಸೆರೆಹಿಡಿಯಲಾಗುತ್ತಿದೆ...",
           detect: "AI ಗುಂಡಿ ಪರಿಶೀಲಿಸುತ್ತಿದೆ...", finalize: "ವಿಳಾಸ ಮತ್ತು ಗುತ್ತಿಗೆ ಖಚಿತಪಡಿಸಲಾಗುತ್ತಿದೆ...",
           write: "ದೂರು ಬರೆಯಲಾಗುತ್ತಿದೆ...", email: "ನಿಮ್ಮ ಇಮೇಲ್ ಆ್ಯಪ್ ತೆರೆಯಲಾಗುತ್ತಿದೆ..." },
   };
   const pmsg = (k) => (PROGRESS[LANG()] && PROGRESS[LANG()][k]) || PROGRESS.en[k];
 
   const MODEL = "gpt-5-mini";
-  const SCREEN_MODEL = "gpt-5-nano";
   const MIN_CONFIDENCE = 0.5;
   const DEDUPE_RADIUS_M = 15;
   const DEDUPE_WINDOW_S = 30 * 60;
@@ -51,14 +50,8 @@ Decide whether the photo clearly shows a pothole on a road surface.
 - description: one or two factual sentences usable in a complaint (surface condition, position on the road, hazard posed).
 - Some images are dashcam frames from a moving vehicle: moderate motion blur, low light, or a boosted-brightness look are normal; judge the road surface itself.`;
 
-  const SCREEN_PROMPT = `This is a dashcam frame from a car in Bengaluru. Decide only whether this
-frame could POSSIBLY show road damage: a pothole, broken or patched asphalt,
-exposed sub-base, loose stones, or any suspicious dark patch or depression on
-the road surface. This is a permissive pre-filter and a stronger model makes
-the final call, so false positives are fine and false negatives are costly.
-Answer false ONLY when the visible road surface is clearly smooth and intact
-with nothing questionable. If there is any doubt at all, answer true.`;
-
+  // Key order is the streaming order: the verdict fields arrive before the
+  // description, so the UI can show a result while the sentence is still being written.
   const ASSESS_SCHEMA = {
     type: "object", additionalProperties: false,
     required: ["is_pothole", "size", "confidence", "looks_like_speed_breaker", "description"],
@@ -69,11 +62,6 @@ with nothing questionable. If there is any doubt at all, answer true.`;
       looks_like_speed_breaker: { type: "boolean" },
       description: { type: "string" },
     },
-  };
-  const SCREEN_SCHEMA = {
-    type: "object", additionalProperties: false,
-    required: ["possible_pothole"],
-    properties: { possible_pothole: { type: "boolean" } },
   };
   const TENDER_SCHEMA = {
     type: "object", additionalProperties: false,
@@ -86,15 +74,29 @@ with nothing questionable. If there is any doubt at all, answer true.`;
   };
 
   // ---------- OpenAI ----------
+  const OAI_URL = "https://api.openai.com/v1/responses";
+  const authHeaders = () => ({ "Content-Type": "application/json", "Authorization": `Bearer ${S.key}` });
+
+  // Detection is a classification job, not an essay: left at its default the model
+  // spends 200+ hidden reasoning tokens per photo before answering, which measured
+  // as roughly 3.5 of the 6.5 seconds a verdict used to take.
+  const withSpeedDefaults = (body) => ({ reasoning: { effort: "minimal" }, ...body });
+
+  // Fatal means "fails the same way without streaming", so retrying plain is pointless.
+  const fatal = (e) => { e.fatal = true; return e; };
+  function mapStatus(res) {
+    if (res.status === 401) return fatal(new Error("OpenAI rejected the API key. Check it in settings."));
+    if (res.status === 429) return fatal(new Error("Rate limited by OpenAI. Try again in a minute."));
+    return null;
+  }
+
   async function oai(body) {
     if (!S.key) throw new Error("OpenAI API key missing. Tap the gear icon and paste it.");
-    const res = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${S.key}` },
-      body: JSON.stringify(body),
+    const res = await fetch(OAI_URL, {
+      method: "POST", headers: authHeaders(), body: JSON.stringify(withSpeedDefaults(body)),
     });
-    if (res.status === 401) throw new Error("OpenAI rejected the API key. Check it in settings.");
-    if (res.status === 429) throw new Error("Rate limited by OpenAI. Try again in a minute.");
+    const bad = mapStatus(res);
+    if (bad) throw bad;
     if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${(await res.text()).slice(0, 160)}`);
     const data = await res.json();
     const msg = (data.output || []).find((o) => o.type === "message");
@@ -102,18 +104,110 @@ with nothing questionable. If there is any doubt at all, answer true.`;
     if (!text || !text.text) throw new Error("Empty model response.");
     return JSON.parse(text.text);
   }
-  const fmt = (name, schema) => ({ format: { type: "json_schema", name, schema, strict: true } });
-  const progress = (m) => { try { window.dispatchEvent(new CustomEvent("pipeline-progress", { detail: m })); } catch (e) {} };
 
-  function analyzeImage(dataUrl, prompt, name, schema, model) {
-    return oai({
+  // Structured outputs stream their keys in schema order, so is_pothole and size land
+  // well before the description does. onEarly fires on that partial verdict.
+  // The early verdict must apply the same rule as the final one, or a low-confidence
+  // true would announce a pothole the pipeline then rejects. A false needs no
+  // confidence to be final, so the early "no" stays as fast as the flag itself.
+  const peekVerdict = (partial) => {
+    const m = /"is_pothole"\s*:\s*(true|false)/.exec(partial);
+    if (!m) return null;
+    if (m[1] === "false") return { is_pothole: false, size: null };
+    const c = /"confidence"\s*:\s*([0-9]*\.?[0-9]+)/.exec(partial);
+    if (!c) return null;
+    const s = /"size"\s*:\s*(?:"(small|medium|large)"|null)/.exec(partial);
+    return { is_pothole: parseFloat(c[1]) >= MIN_CONFIDENCE, size: s ? s[1] || null : null };
+  };
+
+  function drainSSE(chunk, state, onEarly) {
+    state.buf += chunk;
+    let i;
+    while ((i = state.buf.indexOf("\n")) >= 0) {
+      const line = state.buf.slice(0, i).trim();
+      state.buf = state.buf.slice(i + 1);
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      let ev;
+      try { ev = JSON.parse(payload); } catch (e) { continue; }
+      if (ev.type === "response.output_text.delta" && typeof ev.delta === "string") {
+        state.text += ev.delta;
+        if (!state.early && onEarly) {
+          const v = peekVerdict(state.text);
+          if (v) { state.early = true; try { onEarly(v); } catch (e) {} }
+        }
+      }
+    }
+  }
+
+  async function oaiStream(body, onEarly) {
+    if (!S.key) throw new Error("OpenAI API key missing. Tap the gear icon and paste it.");
+    const res = await fetch(OAI_URL, {
+      method: "POST", headers: authHeaders(),
+      body: JSON.stringify(withSpeedDefaults({ ...body, stream: true })),
+    });
+    const bad = mapStatus(res);
+    if (bad) throw bad;
+    if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${(await res.text()).slice(0, 160)}`);
+
+    const state = { buf: "", text: "", early: false };
+    if (res.body && typeof res.body.getReader === "function") {
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        drainSSE(dec.decode(value, { stream: true }), state, onEarly);
+      }
+    } else {
+      // Buffered transports (the native HTTP bridge) hand back the whole SSE body at once.
+      drainSSE(await res.text(), state, onEarly);
+    }
+    drainSSE("\n", state, onEarly);
+    if (!state.text) throw new Error("Empty model response.");
+    return JSON.parse(state.text);
+  }
+
+  const fmt = (name, schema) => ({
+    format: { type: "json_schema", name, schema, strict: true },
+    verbosity: "low",
+  });
+  const progress = (m) => { try { window.dispatchEvent(new CustomEvent("pipeline-progress", { detail: m })); } catch (e) {} };
+  const emitVerdict = (v) => { try { window.dispatchEvent(new CustomEvent("pipeline-verdict", { detail: v })); } catch (e) {} };
+
+  let streamBroken = false;
+  async function analyzeImage(dataUrl, prompt, name, schema, model, onEarly) {
+    const body = {
       model,
       input: [{ role: "user", content: [
         { type: "input_image", image_url: dataUrl },
         { type: "input_text", text: prompt },
       ] }],
       text: fmt(name, schema),
-    });
+    };
+    if (!onEarly || streamBroken) return oai(body);
+    try {
+      return await oaiStream(body, onEarly);
+    } catch (e) {
+      // A bad key or a rate limit fails identically unstreamed, so surface those.
+      if (e && e.fatal) throw e;
+      // Anything else (a server that refuses stream:true, a transport that cannot
+      // stream, a parse failure) must not cost us the verdict. Remember it, so the
+      // wasted round trip is paid once per launch and not on every photo.
+      streamBroken = true;
+      return oai(body);
+    }
+  }
+
+  // One warm TLS connection ahead of the first real call. Costs no tokens.
+  let warmedAt = 0;
+  async function prewarm() {
+    if (!S.key || Date.now() - warmedAt < 60000) return;
+    warmedAt = Date.now();
+    try {
+      await fetch("https://api.openai.com/v1/models?limit=1", { headers: authHeaders() });
+    } catch (e) {}
   }
 
   // ---------- location ----------
@@ -193,7 +287,14 @@ own layout or ward is a valid match. If no candidate clearly covers this locatio
 match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     let m;
     try {
-      m = await oai({ model: MODEL, input: prompt, text: fmt("tender_match", TENDER_SCHEMA) });
+      // Minimal effort suits a verdict on one photo. Picking one contract out of 25
+      // near-identical road-works descriptions is the opposite job, and it names a
+      // real contractor in a complaint, so this call keeps room to think.
+      m = await oai({
+        model: MODEL, input: prompt,
+        reasoning: { effort: "medium" },
+        text: fmt("tender_match", TENDER_SCHEMA),
+      });
     } catch (e) { return null; }
     if (!m || m.match_index === null || m.match_index < 0 || m.match_index >= candidates.length || m.confidence < 0.6) return null;
     const t = candidates[m.match_index];
@@ -331,26 +432,25 @@ ${S.name}`;
     }
 
     progress(driveMode ? pmsg("capture") : pmsg("compress"));
-    const dataUrl = await toDataUrl(photo, driveMode ? 1280 : 2000);
+    // Drive Mode ran at 1280 until an eval showed it drops real potholes that survive
+    // at full size: distant, small defects lose just enough detail to fall under the
+    // confidence gate. Resolution is the one thing detection cannot get back.
+    const dataUrl = await toDataUrl(photo, 2000);
     // Geocoding runs in parallel with the AI calls; it never gates detection.
     const geoP = lat != null ? reverseGeocode(lat, lng).catch(() => null) : Promise.resolve(null);
-    if (driveMode) {
-      progress(pmsg("screen"));
-      const s = await analyzeImage(dataUrl, SCREEN_PROMPT, "screen", SCREEN_SCHEMA, SCREEN_MODEL);
-      if (!s.possible_pothole) {
-        if (S.debug) await saveDebugFrame(dataUrl, lat, lng, "Debug frame: screened out by the quick road scan.", 0, driveId);
-        return { found: false };
-      }
-    }
     progress(pmsg("detect"));
-    // Contract adjudication runs speculatively in parallel with confirmation:
-    // total wait becomes the max of the two instead of their sum. The rare
-    // waste is one cheap text call when a screened frame ends up rejected.
-    const tenderP = geoP.then((addr) => matchTender(addr)).catch(() => null);
+    // Single shot: contract adjudication runs speculatively alongside confirmation,
+    // so the wait is the max of the two rather than their sum, and one watching user
+    // feels it. Drive Mode rejects most frames and reports through the HUD, so
+    // speculating there would buy nothing and bill a text call per frame.
+    const tenderP = driveMode ? null : geoP.then((addr) => matchTender(addr)).catch(() => null);
     const detectPrompt = DETECT_PROMPT + (LANG() === "kn"
       ? "\n- Write the description field in formal Kannada (ಕನ್ನಡ ಭಾಷೆಯಲ್ಲಿ ಬರೆಯಿರಿ)."
       : "");
-    const a = await analyzeImage(dataUrl, detectPrompt, "assessment", ASSESS_SCHEMA, MODEL);
+    // Single shot has one verdict on screen, so show it the moment it streams in.
+    // Drive Mode analyses run concurrently and report through the HUD instead.
+    const a = await analyzeImage(dataUrl, detectPrompt, "assessment", ASSESS_SCHEMA, MODEL,
+      driveMode ? null : emitVerdict);
     const accepted = a.is_pothole && a.confidence >= MIN_CONFIDENCE;
     if (driveMode && !accepted) {
       if (S.debug) await saveDebugFrame(dataUrl, lat, lng, `Debug frame: analyzed, no pothole confirmed (${Math.round(a.confidence * 100)}%). ${a.description}`, a.confidence, driveId);
@@ -360,7 +460,7 @@ ${S.name}`;
     if (accepted) progress(pmsg("finalize"));
     const address = accepted ? await geoP : null;
     const [officerName, officerEmail] = accepted ? routeOfficer(address) : [null, null];
-    const tender = accepted ? await tenderP : null;
+    const tender = accepted ? await (tenderP || matchTender(address).catch(() => null)) : null;
     if (accepted) progress(pmsg("write"));
     const [subject, body] = accepted ? draftEmail(a, lat, lng, address, officerName, tender) : [null, null];
 
@@ -472,7 +572,7 @@ ${S.name}`;
     } catch (e) {}
   }
 
-  window.StandaloneAPI = { handle };
+  window.StandaloneAPI = { handle, prewarm };
 
   // First run: open settings if no key yet (after the main script wires the UI).
   window.addEventListener("load", () => {
