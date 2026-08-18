@@ -13,3 +13,5 @@ android-app/android/local.properties
 *.apk
 *.log
 .DS_Store
+eval/images/
+eval/results/
