@@ -60,9 +60,9 @@ with live stage updates: compress, AI check (`gpt-5-mini`), reverse geocode
 drafting. Result: an editable draft with photo, address, coordinates, map
 link, the routed commissioner, and the probable contract.
 
-**Drive Mode.** Mount the phone facing the road. While you move, frames are
-captured every 1.2 s with 10 m minimum spacing and up to 3 analyzed
-concurrently, each by a single `gpt-5-mini` call. (A cheaper `gpt-5-nano`
+**Drive Mode.** Mount the phone facing the road. While you move, the loop polls
+every 0.4 s and captures whenever you have covered 8 m, with up to 4 frames
+analyzed concurrently, each by a single `gpt-5-mini` call. (A cheaper `gpt-5-nano`
 pre-screen used to run first; an eval showed it rejected most real potholes
 before the main model ever saw them, so it was removed.)
 Frames are true camera stills via `ImageCapture.takePhoto()` where
