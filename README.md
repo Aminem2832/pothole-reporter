@@ -84,6 +84,8 @@ Settings (gear icon) also has:
 - **Review and label frames:** step through captured frames and mark each one
   pothole or not a pothole. The model's own verdict is shown after the photo, so
   it nudges your eye as little as possible.
+- **Save every analysed frame to the device:** writes each checked frame and the
+  model's verdict into `Documents/pothole-frames`, for building an evaluation set.
 - **Export labelled dataset:** packs every frame *you* labelled, plus a
   `labels.json` recording your label alongside what the model said, into a zip
   and hands it to the Android share sheet. No account and no server: it goes to
@@ -124,6 +126,19 @@ a chosen spacing and run them through the same pipeline. Positions come from a
 timestamped GPS track recorded alongside, and results dedupe against what the
 live pass already found. A drive offers this as soon as it ends, which is when the
 footage is worth the most.
+
+**Building an evaluation set.** Turn on **Save every analysed frame to the device**
+in Settings and the footage pass writes every frame it checked, rejects included,
+into `Documents/pothole-frames/<drive id>/` with a `manifest.json` recording the
+model's verdict, confidence and coordinates for each one. That folder is visible in
+the Files app, so it copies off by cable or into Drive, and it is the raw material
+for a benchmark: the model's verdicts are a starting point to correct, never ground
+truth. Budget about 300 KB a frame.
+
+The frames go to Documents rather than the photo gallery deliberately. Gallery
+visibility requires registering each file with Android's MediaStore, which the
+Filesystem plugin does not do, and a drive's worth of frames would bury real photos
+in the camera roll.
 
 **What is kept.** Frames the AI rejected are never stored: the footage already
 holds every frame, so keeping the rejects as separate images filled the device for

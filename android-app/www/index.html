@@ -143,6 +143,11 @@
         <input type="checkbox" id="setDebug" style="width:18px;height:18px;accent-color:var(--accent)">
         <span id="debugLabel">Debug mode: keep every drive frame for review</span>
       </label>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:#f2f2f4">
+        <input type="checkbox" id="setKeepFrames" style="width:18px;height:18px;accent-color:var(--accent)">
+        <span id="keepFramesLabel">Save every analysed frame to the device</span>
+      </label>
+      <div class="meta" id="keepFramesNote"></div>
       <div class="meta" id="settingsNote" style="margin-top:10px">Complaints are always created as email drafts addressed to the concerned corporation officer. Nothing sends until you press send in your email app.</div>
       <button class="ghost" id="reviewBtn" style="width:100%;margin-top:12px">Review and label frames</button>
       <button class="ghost" id="exportBtn" style="width:100%;margin-top:8px">Export labelled dataset</button>
@@ -200,6 +205,10 @@ const I18N = {
     analysing: "Frame {i} of {n} &middot; {found} new",
     analyse_done: "Footage analysed: {found} new potholes from {n} frames.",
     analyse_none: "No footage stored for this drive.",
+    keep_frames_label: "Save every analysed frame to the device",
+    keep_frames_note: "Writes each frame the AI checked, with its verdict, into Documents/pothole-frames on this phone. Visible in the Files app, and the raw material for building an evaluation set. Adds up fast: roughly 300 KB a frame.",
+    frames_saved: "{n} frames written to Documents/{dir}.",
+    frames_failed: "Could not write frames to the device.",
     footage_freed: "Video deleted, {mb} MB freed.",
     footage_kept: "Video kept (debug mode).",
     offer_analyse: "Analyse this drive's video now? {clips} clips, {mb} MB. Potholes are kept as photos; the rest is discarded.",
@@ -278,6 +287,10 @@ const I18N = {
     analysing: "ಫ್ರೇಮ್ {i}/{n} &middot; {found} ಹೊಸ",
     analyse_done: "ವಿಶ್ಲೇಷಣೆ ಮುಗಿಯಿತು: {n} ಫ್ರೇಮ್‌ಗಳಿಂದ {found} ಹೊಸ ಗುಂಡಿಗಳು.",
     analyse_none: "ಈ ಡ್ರೈವ್‌ಗೆ ವಿಡಿಯೋ ಇಲ್ಲ.",
+    keep_frames_label: "ವಿಶ್ಲೇಷಿಸಿದ ಎಲ್ಲ ಫ್ರೇಮ್‌ಗಳನ್ನು ಸಾಧನದಲ್ಲಿ ಉಳಿಸಿ",
+    keep_frames_note: "AI ಪರಿಶೀಲಿಸಿದ ಪ್ರತಿ ಫ್ರೇಮ್ ಮತ್ತು ಅದರ ತೀರ್ಮಾನವನ್ನು Documents/pothole-frames ನಲ್ಲಿ ಬರೆಯುತ್ತದೆ. ಫೈಲ್ಸ್ ಆ್ಯಪ್‌ನಲ್ಲಿ ಕಾಣುತ್ತದೆ. ಪ್ರತಿ ಫ್ರೇಮ್ ಸುಮಾರು 300 KB.",
+    frames_saved: "{n} ಫ್ರೇಮ್‌ಗಳನ್ನು Documents/{dir} ನಲ್ಲಿ ಬರೆಯಲಾಗಿದೆ.",
+    frames_failed: "ಫ್ರೇಮ್‌ಗಳನ್ನು ಸಾಧನದಲ್ಲಿ ಬರೆಯಲಾಗಲಿಲ್ಲ.",
     footage_freed: "ವಿಡಿಯೋ ಅಳಿಸಲಾಗಿದೆ, {mb} MB ಮುಕ್ತ.",
     footage_kept: "ವಿಡಿಯೋ ಉಳಿಸಲಾಗಿದೆ (ಡೀಬಗ್ ಮೋಡ್).",
     offer_analyse: "ಈ ಡ್ರೈವ್‌ನ ವಿಡಿಯೋ ಈಗ ವಿಶ್ಲೇಷಿಸಬೇಕೆ? {clips} ತುಣುಕುಗಳು, {mb} MB. ಗುಂಡಿಗಳು ಫೋಟೋಗಳಾಗಿ ಉಳಿಯುತ್ತವೆ, ಉಳಿದವು ಅಳಿಸಲಾಗುತ್ತದೆ.",
@@ -357,6 +370,8 @@ function applyLang() {
   $("keyLabel").textContent = t("key_label");
   $("nameLabel").textContent = t("name_label");
   $("debugLabel").textContent = t("debug_label");
+  $("keepFramesLabel").textContent = t("keep_frames_label");
+  $("keepFramesNote").innerHTML = t("keep_frames_note");
   $("settingsNote").textContent = t("settings_note");
   $("wipeBtn").textContent = t("wipe_btn");
   $("setBack").textContent = t("back");
@@ -842,6 +857,39 @@ let reviewQueue = [], reviewDone = 0;
 // flat memory, costing a few tens of milliseconds at each boundary. WebM does stream,
 // but a mid-stream WebM chunk carries no headers, so it cannot be seeked on its own.
 const isDebug = () => localStorage.getItem("debug_mode") === "1";
+const keepFrames = () => localStorage.getItem("keep_frames") === "1";
+
+// Writing frames out to the device is what makes an evaluation set possible: every
+// frame the model judged, with what it said, kept where a human can relabel it.
+// Documents rather than the photo gallery on purpose. Gallery visibility needs the
+// frames registered with Android's MediaStore, which the Filesystem plugin does not
+// do, and a drive's worth of frames in the camera roll would bury real photos.
+const FRAME_DIR = "pothole-frames";
+
+async function writeFrameFile(driveId, index, blob) {
+  const P = window.Capacitor && Capacitor.Plugins;
+  if (!P || !P.Filesystem) return null;
+  const b64 = await new Promise((res) => {
+    const fr = new FileReader();
+    fr.onload = () => res(String(fr.result).split(",")[1]);
+    fr.onerror = () => res(null);
+    fr.readAsDataURL(blob);
+  });
+  if (!b64) return null;
+  const name = `${FRAME_DIR}/${driveId}/frame-${String(index).padStart(5, "0")}.jpg`;
+  await P.Filesystem.writeFile({ path: name, data: b64, directory: "DOCUMENTS", recursive: true });
+  return name;
+}
+
+async function writeManifest(driveId, entries) {
+  const P = window.Capacitor && Capacitor.Plugins;
+  if (!P || !P.Filesystem) return;
+  const body = JSON.stringify({ drive_id: driveId, exported_at: new Date().toISOString(),
+    count: entries.length, note: "labels are the model's own verdicts, not human ground truth",
+    frames: entries }, null, 1);
+  await P.Filesystem.writeFile({ path: `${FRAME_DIR}/${driveId}/manifest.json`,
+    data: btoa(unescape(encodeURIComponent(body))), directory: "DOCUMENTS", recursive: true });
+}
 
 let recCtx = null;
 
@@ -1024,6 +1072,9 @@ async function analyseFootage(driveId, driveRec) {
   const canvas = document.createElement("canvas");
   const pending = [];
   let found = 0, done = 0, planned = 0, elapsed = 0;
+  const saveToDisk = keepFrames();
+  const manifest = [];
+  let written = 0, writeFailed = false;
 
   for (const clip of footage.blobs) {
     const url = URL.createObjectURL(clip);
@@ -1056,8 +1107,25 @@ async function analyseFootage(driveId, driveRec) {
       if (pos) { fd.append("lat", String(pos.lat)); fd.append("lng", String(pos.lng)); }
       fd.append("drive_id", String(driveId));
       fd.append("dedupe_all", "1");
+      const frameNo = planned - 1, atAbs = elapsed + at;
       pending.push(api("/api/frame", { method: "POST", body: fd })
-        .then((r) => { if (r && r.found) found++; })
+        .then(async (r) => {
+          if (r && r.found) found++;
+          // Every frame is written, not only the finds: an evaluation set is worthless
+          // without the frames the model rejected.
+          if (!saveToDisk || writeFailed) return;
+          try {
+            const file = await writeFrameFile(driveId, frameNo, blob);
+            if (!file) { writeFailed = true; return; }
+            written++;
+            const rep = r && r.report;
+            manifest.push({ file: file.split("/").pop(), at_seconds: +atAbs.toFixed(2),
+              lat: pos ? pos.lat : null, lng: pos ? pos.lng : null,
+              model_said: rep
+                ? { is_pothole: !!rep.is_pothole, size: rep.size, confidence: rep.confidence }
+                : { is_pothole: false, skipped: !!(r && r.skipped) } });
+          } catch (e) { writeFailed = true; }
+        })
         .catch(() => {})
         .finally(() => {
           done++;
@@ -1070,6 +1138,9 @@ async function analyseFootage(driveId, driveRec) {
   }
 
   await Promise.allSettled(pending);
+  if (saveToDisk && written) {
+    try { await writeManifest(driveId, manifest); } catch (e) { writeFailed = true; }
+  }
   // Retention: potholes are kept as stills either way, rejected frames were never
   // stored, and the footage itself only survives in debug mode. Deleting it is safe
   // precisely because the analysis that just ran is what extracted everything wanted.
@@ -1085,9 +1156,13 @@ async function analyseFootage(driveId, driveRec) {
   }
   await loadReports();
   show("home");
+  const diskNote = !saveToDisk ? ""
+    : (written ? " " + t("frames_saved", { n: written, dir: `${FRAME_DIR}/${driveId}` })
+               : " " + t("frames_failed"));
   alert(t("analyse_done", { found, n: planned })
         + (freed ? " " + t("footage_freed", { mb: freed.toFixed(0) })
-                 : (isDebug() ? " " + t("footage_kept") : "")));
+                 : (isDebug() ? " " + t("footage_kept") : ""))
+        + diskNote);
 }
 
 // ---------- contribution dashboard ----------
@@ -1268,6 +1343,7 @@ window.openSettings = (firstRun) => {
   $("setKey").value = localStorage.getItem("openai_key") || "";
   $("setName").value = localStorage.getItem("sender_name") || "";
   $("setDebug").checked = localStorage.getItem("debug_mode") === "1";
+  $("setKeepFrames").checked = localStorage.getItem("keep_frames") === "1";
   $("setLang").value = LANG;
   $("settingsHint").textContent = firstRun ? t("welcome_hint") : "";
   show("settings");
@@ -1278,6 +1354,7 @@ $("setSave").onclick = async () => {
   localStorage.setItem("openai_key", $("setKey").value.trim());
   localStorage.setItem("sender_name", $("setName").value.trim());
   localStorage.setItem("debug_mode", $("setDebug").checked ? "1" : "0");
+  localStorage.setItem("keep_frames", $("setKeepFrames").checked ? "1" : "0");
   const newLang = $("setLang").value;
   localStorage.setItem("app_lang", newLang);
   if (newLang !== LANG) { location.reload(); return; }
