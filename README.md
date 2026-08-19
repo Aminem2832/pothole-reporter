@@ -156,6 +156,18 @@ assembleDebug`. To test in a browser, serve `android-app/www/` and open
 `eval/` holds the detection benchmark and, more usefully, a log of the accuracy
 changes that were tried and rejected, with the evidence.
 
+## What leaves your phone
+
+Every photo the app checks is sent to OpenAI for detection, so it is processed outside
+India. Road photographs routinely contain number plates, faces and shopfronts, and none of
+that is blurred before it is sent. Coordinates go to OpenStreetMap to resolve an address
+and to Karnataka's state GIS to find the responsible body. The API key and every report
+stay on the device.
+
+There is no server and no account, so this project collects nothing. That is a deliberate
+choice, not only a simplification: with everything on-device, no operator ever holds your
+name, your location history or your photographs.
+
 ## Disclaimer
 
 Contract matches are probabilistic and always worded as a probable match to verify;
