@@ -387,14 +387,17 @@ Decide whether the photo clearly shows a pothole on a road surface.
 
   // ---------- tenders ----------
   let _tenders = null;
+  // Parsed once per app session, which matters far more now the file is 9.5 MB: the
+  // bundled data cannot change while the app runs, so one parse is correct.
   async function tenders() {
     if (_tenders) return _tenders;
     try {
-      const res = await fetch("tenders.json");
-      _tenders = res.ok ? await res.json() : [];
+      const res = await fetchWithTimeout("tenders.json", {}, 20000);
+      _tenders = await res.json();
     } catch (e) { _tenders = []; }
     return _tenders;
   }
+
 
   const TENDER_STOP = new Set(["road", "roads", "street", "cross", "main", "layout", "bengaluru", "bangalore",
     "karnataka", "india", "ward", "city", "corporation", "south", "north", "east",

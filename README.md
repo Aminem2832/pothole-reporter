@@ -102,15 +102,21 @@ Sahaaya 2.0.
 
 ## Contracts
 
-The APK bundles 1,877 awarded road-work contracts from KPPP, Karnataka's
-procurement portal. They are Bengaluru contracts, so a complaint elsewhere in the
-state reaches the right officer but names no contractor yet; KPPP covers the whole
-state and the statewide pull is the next piece of work. When a match clears a confidence gate, the complaint names the
+The APK bundles 42,283 awarded road-work contracts pulled from KPPP, Karnataka's
+procurement portal, covering the whole state. When a match clears a confidence gate the
+complaint names the tender, always as a probable match for the officer to verify.
+
+The portal's search results do not carry the winning bidder, so only the 1,124 contracts
+from the Bengaluru snapshot name a contractor; elsewhere the complaint names the tender
+and says plainly that no bidder is recorded rather than inventing one. Award records
+carry no defect liability period either, so warranty status is inferred from the
+publication date and stated as a possibility, never a fact.
+
+Refresh: `python3 tools/pull-kppp.py`. When a match clears a confidence gate, the complaint names the
 tender and the contractor, always as a probable match for the officer to verify.
 Award records carry no defect liability period, so warranty status is inferred from
 the publication date and is stated as a possibility, never a fact.
 
-Refresh: update `data/tenders.csv`, run `python3 make_tenders_json.py`, rebuild.
 
 ## Cost
 
