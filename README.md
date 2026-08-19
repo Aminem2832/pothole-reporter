@@ -1,45 +1,39 @@
 # Pothole Reporter
 
-An Android app that runs entirely on the phone. It photographs potholes (or
-watches the road continuously in Drive Mode), verifies and classifies them
-with AI vision, resolves the road address, identifies the concerned city
-corporation commissioner and the road contractor on public record, and opens
-a ready-to-send complaint email for your review. The app never sends email
-itself: you press send in your email app.
+Around 2,000 people a year die on Indian roads because of potholes, and many more
+lose hours to them. Most of those potholes are already someone's job to fix, often
+under a contract still in warranty. The gap is that nobody reports them to the right
+person with enough detail to act on.
 
-No server, no backend, no credentials in the APK. The app is the product.
+This app closes that gap. Mount your phone, drive, and it finds the potholes,
+works out which officer is responsible, finds the road contract they were built
+under, and writes the complaint. You read it and press send.
 
-**Coverage: Bengaluru only.** The officer directory holds the five Greater
-Bengaluru Authority city corporations, and the bundled contracts are BBMP
-contracts. Outside Bengaluru the app still detects the pothole and saves the
-photo and location, but it will not name a recipient or a contractor, because
-guessing would address your complaint to a body with no jurisdiction over that
-road. Those reports are marked "Outside coverage". Extending to the rest of
-Karnataka is on the roadmap below.
+The aim is to get roads repaired, so that fewer people are hurt and fewer hours are
+lost sitting in traffic that a good road surface would not have created. It is not
+written against anyone. Officers and contractors have a difficult job and a large
+city to keep up with; a complaint that arrives with a photograph, exact coordinates,
+the right office and the relevant contract is simply easier to act on than one that
+does not. That is the whole idea.
+
+No server, no backend, no credentials in the APK. Everything runs on the phone.
 
 ![How a photo becomes a complaint](docs/architecture.png)
 
-Editable source: [`docs/architecture.excalidraw`](docs/architecture.excalidraw),
-which you can open and change at [excalidraw.com](https://excalidraw.com).
+## A real one it caught
 
-## What it actually catches
+Not an illustration. This photo, this output, from the app on a phone.
 
-This is a real photo taken with the app, and the real output it produced. Nothing
-here is illustrative: the verdict, the routed officer and the contract were all
-resolved by the pipeline on the phone.
-
-<img src="docs/example-pothole.jpg" width="380" alt="Pothole on 17th Main Road, HSR Layout, Bengaluru">
+<img src="docs/example-pothole.jpg" width="360" alt="Pothole on 17th Main Road, HSR Layout, Bengaluru">
 
 | | |
 |---|---|
 | Verdict | **medium pothole**, confidence 0.78 |
-| Description | Two medium-sized potholes (approx. 30–60 cm) on the near center-right lane of the road; uneven surface may cause hazard to two-wheelers. |
 | Address | 17th Main Road, Sector 3, HSR Layout, Bengaluru, 560102 |
-| Routed to | Commissioner, Bengaluru South City Corporation (BSCC) |
-| Probable contract | `BBMP/2024-25/RD/WORK_INDENT3877` |
-| Contractor | SHARANAPPA SANGAMESH( SANGAMESH INFRASTRUCTURE INDIA PRIVATE LIMITED ) |
+| Routed to | Commissioner, Bengaluru South City Corporation |
+| Probable contract | `BBMP/2024-25/RD/WORK_INDENT3877`, SANGAMESH INFRASTRUCTURE |
 
-The complaint it drafted, which the app opens in your email app for you to send:
+And the complaint it drafted:
 
 ```text
 Dear Commissioner, Bengaluru South City Corporation (BSCC),
@@ -63,207 +57,99 @@ Regards,
 Gaurav Sen
 ```
 
-## Install and set up (2 minutes)
+That last paragraph is the point. A pothole on a road still under warranty should be
+repaired by the contractor at no further cost to the public.
 
-1. Download `PotholeReporter.apk` from the
-   [Releases page](https://github.com/coding-parrot/pothole-reporter/releases)
-   and sideload it (allow "install from unknown sources"), or build it yourself
-   (see Development below).
-2. On first launch the Settings screen opens. Paste your OpenAI API key and
-   your name. Both are stored only on the device.
-3. Allow camera and location when prompted.
+## Install
 
-The app is bilingual: English and Kannada (ಕನ್ನಡ), switchable in Settings.
-The complaint email, including the AI-written description, is drafted in the
-selected language.
+Download `PotholeReporter.apk` from the
+[Releases page](https://github.com/coding-parrot/pothole-reporter/releases), sideload
+it, paste an OpenAI API key on first launch, allow camera and location. Two minutes.
+English and Kannada, switchable in Settings.
 
-Settings (gear icon) also has:
-- **Debug mode:** keep the recorded video of a drive after its footage has been
-  analysed, instead of deleting it. Use it to diagnose missed potholes, since the
-  video holds every frame rather than the ones the live pass happened to sample.
-- **Delete all reports and photos:** wipes the on-device store.
-- **Review and label frames:** step through captured frames and mark each one
-  pothole or not a pothole. The model's own verdict is shown after the photo, so
-  it nudges your eye as little as possible.
-- **Save every analysed frame to the device:** writes each checked frame and the
-  model's verdict into `Documents/pothole-frames`, for building an evaluation set.
-- **Export labelled dataset:** packs every frame *you* labelled, plus a
-  `labels.json` recording your label alongside what the model said, into a zip
-  and hands it to the Android share sheet. No account and no server: it goes to
-  Drive, mail or a chat, and from there into `eval/` on a laptop.
+## What it does
 
-Only human-labelled frames are exported. A benchmark built from the detector's
-own verdicts cannot measure the detector.
+**Drive Mode.** Mount the phone facing the road. It captures every 8 metres, checks
+up to four frames at once with `gpt-5-mini`, and records the whole drive to video so
+nothing between frames is lost. Afterwards you can re-analyse that footage more
+densely, or against a better model later; a confirmed pothole keeps its photo and the
+video is deleted unless you asked to keep it.
 
-## How it works
+**Single shot.** Point, shoot, get a draft with the photo, address, coordinates, map
+link, the responsible officer and the probable contract.
 
-**Single shot.** Tap "Report a pothole", shoot. The pipeline runs on the phone
-with live stage updates: compress, AI check (`gpt-5-mini`), reverse geocode
-(OpenStreetMap Nominatim), officer routing, contract matching, complaint
-drafting. Result: an editable draft with photo, address, coordinates, map
-link, the routed commissioner, and the probable contract.
+**Review, then send.** Every complaint is a draft you edit. The app never sends
+anything; it opens your email app with the full-resolution photo attached and stops.
 
-**Drive Mode.** Mount the phone facing the road. While you move, the loop polls
-every 0.4 s and captures whenever you have covered 8 m, with up to 4 frames
-analyzed concurrently, each by a single `gpt-5-mini` call. (A cheaper `gpt-5-nano`
-pre-screen used to run first; an eval showed it rejected most real potholes
-before the main model ever saw them, so it was removed.)
-Frames are read straight off the live preview at its full resolution.
-`ImageCapture.takePhoto()` used to be used instead, but it reconfigures the
-capture session on every shot, which stutters the preview once a recorder shares
-the camera, and it bought nothing: the preview is already 1920 wide, the size the
-model is sent. Between 7 PM and 5 AM frames get an automatic brightness and
-contrast boost. Sightings within 15 m of a confirmed pothole dedupe. The Stop
-button sits on top of the video, the hardware back button also stops the
-drive, and every drive ends with an explicit summary, including "No potholes
-found in this drive (N frames checked)" when it comes up empty.
+**Your contribution.** A dashboard totalling potholes found, complaints sent,
+kilometres covered, and a map of every one you have reported.
 
-**Continuous recording.** A drive also records video, in self-contained clips
-written straight to device storage so memory stays flat. Capture therefore never
-depends on picking the right interval: the live pass still drafts complaints as
-you drive, and the footage keeps the road you covered between frames. Afterwards,
-expand the drive in history and tap **Analyse footage** to pull frames back out at
-a chosen spacing and run them through the same pipeline. Positions come from a
-timestamped GPS track recorded alongside, and results dedupe against what the
-live pass already found. A drive offers this as soon as it ends, which is when the
-footage is worth the most.
+## Who receives them
 
-**Building an evaluation set.** Turn on **Save every analysed frame to the device**
-in Settings and the footage pass writes every frame it checked, rejects included,
-into `Documents/pothole-frames/<drive id>/` with a `manifest.json` recording the
-model's verdict, confidence and coordinates for each one. That folder is visible in
-the Files app, so it copies off by cable or into Drive, and it is the raw material
-for a benchmark: the model's verdicts are a starting point to correct, never ground
-truth. Budget about 300 KB a frame.
+BBMP was dissolved in 2025; Bengaluru is run by the Greater Bengaluru Authority
+through five city corporations. The app asks Karnataka's state GIS which body
+contains the pothole and addresses that body's commissioner. Where it cannot
+identify a body, or holds no verified address for one, it says so and refuses to
+send. A complaint to the wrong office is worse than no complaint.
 
-The frames go to Documents rather than the photo gallery deliberately. Gallery
-visibility requires registering each file with Android's MediaStore, which the
-Filesystem plugin does not do, and a drive's worth of frames would bury real photos
-in the camera roll.
+Email is a contact channel, not a tracked one. For a ticket number, also file on
+Sahaaya 2.0.
 
-**What is kept.** Frames the AI rejected are never stored: the footage already
-holds every frame, so keeping the rejects as separate images filled the device for
-nothing. Confirmed potholes are kept as photos. The video itself is deleted once
-its footage has been analysed, freeing the space, unless **Debug mode** is on, in
-which case the video is kept too. Declining the analysis keeps the video, since it
-is then the only copy of the road you covered. Recording runs about 18 MB per
-minute, so a half-hour drive is roughly 500 MB before it is processed away.
+## Contracts
 
-The clips are re-analysable, which is the real reason to keep them: when
-detection improves, old drives can be re-run, where discarded frames are gone.
+The APK bundles 1,877 awarded road-work contracts from KPPP, Karnataka's
+procurement portal. When a match clears a confidence gate, the complaint names the
+tender and the contractor, always as a probable match for the officer to verify.
+Award records carry no defect liability period, so warranty status is inferred from
+the publication date and is stated as a possibility, never a fact.
 
-**Review and send.** Every confirmed pothole is an editable draft. The
-"Email" button opens your email app pre-filled: recipient, subject, body,
-photo attached. You press send there. Canceling the composer leaves the
-report editable and reopenable ("Opened in email" status). Walking works the
-same as driving; there is no accelerometer involved anywhere.
+Refresh: update `data/tenders.csv`, run `python3 make_tenders_json.py`, rebuild.
 
-**Your contribution.** A dashboard on the home screen totals potholes found,
-complaints sent, frames checked, drives, kilometres of road covered (from the
-recorded GPS tracks) and footage held, breaks the finds down by size and by city
-corporation, and pins every located pothole on a map. Tapping a pin opens that
-report. Leaflet is vendored into the APK rather than loaded from a CDN, so the app
-still works offline; the map tiles do need a connection, and without one the same
-points are plotted on a plain scatter instead.
+## Cost
 
-**Storage.** Reports and their photos live in on-device IndexedDB and appear in
-the history list with status chips: Draft, Opened in email, Not a pothole,
-Outside coverage. Past drives collapse into a single row showing the date,
-potholes found and frames actually checked; tap to expand. Inside a drive the
-confirmed potholes sort above the frames that were checked and dismissed, so a
-drive with three finds among two hundred frames does not bury them. Tap any photo to open
-it full screen, pinch to zoom, and swipe or use the arrows to move between
-records without going back to the list.
+Every frame checked is an API call on your key. A city drive costs rupees. A long
+one costs more, because there is no cheap pre-filter: one was tried and it rejected
+most real potholes, so it was removed.
 
-## Who receives complaints
+## Where this is going
 
-BBMP was dissolved in September 2025; Bengaluru is run by the Greater
-Bengaluru Authority (GBA) through five city corporations. Each complaint is
-addressed to the commissioner whose corporation contains the pothole,
-resolved from the reverse-geocoded address, with GBA HQ (`comm@bbmp.gov.in`)
-as the fallback when the location cannot be resolved. The verified addresses
-(official GBA site, Aug 2026) live in `static/standalone.js`. If GPS is
-unavailable, single-shot still produces a draft (photo plus a note that the
-location must be added); Drive Mode waits for a GPS fix before capturing.
-
-Note: email is a contact channel. The tracked grievance channel with ticket
-numbers is the Sahaaya 2.0 / Namma Bengaluru app; file there too when it
-matters.
-
-## Contract matching
-
-The APK bundles 1,877 awarded road-work contracts (Aug 2023 to Apr 2026)
-originating from KPPP, the Karnataka Public Procurement Portal, via the
-public-domain snapshot at bengaluru-road-contracts.pages.dev. When a match
-clears a confidence gate, the complaint names the tender number, contractor,
-and an indicative warranty status, always worded as a probable match for the
-officer to verify against the tender documents. Award records carry no defect
-liability period, so warranty status is a reported-practice heuristic, not a
-per-contract fact.
-
-To refresh the dataset: update `data/tenders.csv`, run
-`python3 make_tenders_json.py`, rebuild the APK.
-
-## Costs
-
-Every analyzed image is an OpenAI API call on your key: one `gpt-5-mini` call
-per captured frame or photo, plus one text call to match the contract, made
-only once a pothole is confirmed. Removing the `gpt-5-nano` pre-screen bought
-recall at the price of running the main model on every frame, so a long drive
-costs more than it used to: budget rupees per drive, not paise. Debug mode
-does not add calls, it only stores what was already analyzed.
+- **Every major Indian city.** Bengaluru works today and the rest of Karnataka is
+  close, since one state GIS answers jurisdiction and one portal holds the contracts.
+  Mumbai, Delhi, Hyderabad, Chennai and Pune each need their own officer directory
+  and tender source, and Delhi needs road-ownership data that splits by carriageway
+  width.
+- **A background camera app.** Capture should not require the app in the foreground
+  with the screen awake. That needs a native camera service, which is real work but
+  is what makes this usable on an ordinary commute.
+- **No API key.** A hosted service so anyone can report a pothole without opening a
+  billing account, with the operator's key behind attestation, per-device quotas and
+  a spend ceiling. Built, on the `server-backed` branch, not yet live.
 
 ## Development
 
-- Source of truth: `static/index.html` (UI) and `static/standalone.js` (the
-  whole engine: OpenAI Responses API with structured outputs, IndexedDB,
-  routing, tender matching, native email composer via Capacitor).
-- Build: copy both files to `android-app/www/`, then in `android-app/` run
-  `npx cap sync android`, and in `android-app/android/` run
-  `./gradlew assembleDebug` with
-  `ANDROID_HOME=/opt/homebrew/share/android-commandlinetools`.
-- Test harness: serve `android-app/www/` with any static file server and open
-  `http://localhost:8765/?key=sk-...` in Chromium launched with
-  `--disable-web-security` (stands in for the WebView's CORS-free native
-  HTTP).
-- `reports.db` and `photos/` in the project root are archives from the
-  retired server era; the app does not use them.
+`static/index.html` is the UI and `static/standalone.js` is the whole engine. Copy
+both into `android-app/www/`, then `npx cap sync android` and `./gradlew
+assembleDebug`. To test in a browser, serve `android-app/www/` and open
+`http://localhost:8765/?key=sk-...` in Chromium with `--disable-web-security`.
+
+`eval/` holds the detection benchmark and, more usefully, a log of the accuracy
+changes that were tried and rejected, with the evidence.
 
 ## Disclaimer
 
-Contract matches are probabilistic and always worded as "probable match,
-kindly verify against the tender documents"; keep that wording. The app never
-sends email; every complaint is sent by you, from your account, and you are
-responsible for what you send. This project is not legal advice and is not
-affiliated with GBA, BBMP, or any government body.
+Contract matches are probabilistic and always worded as a probable match to verify;
+keep that wording. The app never sends email. Every complaint is sent by you, from
+your account, and you are responsible for its contents. Not legal advice, and not
+affiliated with GBA, BBMP or any government body.
 
 ## Credits
 
-- Map: [Leaflet](https://leafletjs.com) (BSD-2-Clause), vendored in
-  `static/vendor/`, with tiles from OpenStreetMap
-- Contract data: public-domain KPPP award snapshot by
-  [bengaluru-road-contracts.pages.dev](https://bengaluru-road-contracts.pages.dev)
-  (ultimate source: Karnataka Public Procurement Portal)
-- Officer directory: official GBA website (verified Aug 2026)
-- Reverse geocoding: OpenStreetMap Nominatim
-- Built with OpenAI vision models for detection and drafting
+Contract data from the public-domain KPPP snapshot at
+[bengaluru-road-contracts.pages.dev](https://bengaluru-road-contracts.pages.dev).
+Officer directory from the official GBA site. Geocoding by OpenStreetMap Nominatim,
+maps by [Leaflet](https://leafletjs.com). Detection and drafting by OpenAI vision
+models.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-## Roadmap ideas
-
-- Pan-Karnataka coverage. Karnataka has 319 urban local bodies (18 city
-  corporations, then city and town councils and panchayats), plus PWD for state
-  highways and the panchayat engineering department for rural roads. The state
-  GIS (KGIS) answers "which body owns this point" from a lat/lng in one query
-  and returns the national LGD code, which is the right key for an officer
-  directory. Karnataka ULB emails are published per district on the NIC district
-  sites. KPPP covers road contracts statewide, not just Bengaluru.
-- Keystore-backed key storage
-- Offline corporation routing via boundary polygons (no Nominatim dependency)
-- Fresh tender data past Apr 2026 (KPPP API pull) and ward-polygon matching
-- Post-drive batch analysis mode (cheaper, non-live) and a local YOLO
-  pre-filter (RDD2022) for near-zero-cost continuous drives
-- Sahaaya auto-filing if a public API ever appears
