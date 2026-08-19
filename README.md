@@ -86,11 +86,16 @@ kilometres covered, and a map of every one you have reported.
 
 ## Who receives them
 
-BBMP was dissolved in 2025; Bengaluru is run by the Greater Bengaluru Authority
-through five city corporations. The app asks Karnataka's state GIS which body
-contains the pothole and addresses that body's commissioner. Where it cannot
-identify a body, or holds no verified address for one, it says so and refuses to
-send. A complaint to the wrong office is worse than no complaint.
+The app asks Karnataka's state GIS which local body contains the pothole, then
+addresses that body's head: a Commissioner for a city corporation, a Chief Officer
+for a municipal council or town panchayat. All 18 corporations are covered, including
+the five Greater Bengaluru Authority ones that replaced BBMP in 2025, along with 164
+councils and panchayats: 182 of the state's 319 bodies.
+
+Where the GIS finds no town, the road belongs to the state PWD or a panchayat and the
+app says which panchayat rather than guessing an office. Outside Karnataka, and for
+any body whose official address is not yet in the directory, it refuses to name a
+recipient. A complaint to the wrong office is worse than no complaint.
 
 Email is a contact channel, not a tracked one. For a ticket number, also file on
 Sahaaya 2.0.
@@ -98,7 +103,9 @@ Sahaaya 2.0.
 ## Contracts
 
 The APK bundles 1,877 awarded road-work contracts from KPPP, Karnataka's
-procurement portal. When a match clears a confidence gate, the complaint names the
+procurement portal. They are Bengaluru contracts, so a complaint elsewhere in the
+state reaches the right officer but names no contractor yet; KPPP covers the whole
+state and the statewide pull is the next piece of work. When a match clears a confidence gate, the complaint names the
 tender and the contractor, always as a probable match for the officer to verify.
 Award records carry no defect liability period, so warranty status is inferred from
 the publication date and is stated as a possibility, never a fact.
@@ -113,11 +120,10 @@ most real potholes, so it was removed.
 
 ## Where this is going
 
-- **Every major Indian city.** Bengaluru works today and the rest of Karnataka is
-  close, since one state GIS answers jurisdiction and one portal holds the contracts.
-  Mumbai, Delhi, Hyderabad, Chennai and Pune each need their own officer directory
-  and tender source, and Delhi needs road-ownership data that splits by carriageway
-  width.
+- **Every major Indian city.** Karnataka works today. Mumbai, Delhi, Hyderabad,
+  Chennai and Pune each need their own officer directory and tender source, and Delhi
+  needs road-ownership data that splits by carriageway width. The remaining 137
+  Karnataka bodies need addresses their district sites do not publish.
 - **A background camera app.** Capture should not require the app in the foreground
   with the screen awake. That needs a native camera service, which is real work but
   is what makes this usable on an ordinary commute.

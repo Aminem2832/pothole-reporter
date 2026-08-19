@@ -195,7 +195,7 @@ const I18N = {
     chip_draft: "Draft", chip_sent: "Sent", chip_queued: "Opened in email", chip_rejected: "Not a pothole",
     chip_unrouted: "Outside coverage",
     no_location: "The location could not be determined.",
-    rural_road: "This road is not inside any town or city.",
+    rural_road: "This road is in {body} gram panchayat, not a town or city.",
     rural_road_help: "The pothole was confirmed, but it sits outside every urban local body, so it belongs to the state PWD or the panchayat engineering department rather than a municipality. Those are not in the directory yet, so no complaint has been addressed. The photo and location are saved.",
     no_address: "No published address for {body}.",
     no_address_help: "The pothole was confirmed and the responsible local body identified, but the app holds no official email for it and will not guess one. The photo and location are saved; the address can be added to the directory.",
@@ -239,7 +239,7 @@ const I18N = {
     model_said: "The app said: {verdict} ({pct}%)",
     export_ready: "{n} labelled frames, {mb} MB. Choose where to send it.",
     outside_coverage: "This location is outside the area this app covers.",
-    outside_coverage_help: "The officer directory and road contracts only cover Bengaluru (the five GBA city corporations), so there is no authority this app can correctly address. The photo and location are saved.",
+    outside_coverage_help: "This point is outside Karnataka, and the officer directory only covers Karnataka local bodies, so there is no authority this app can correctly address. The photo and location are saved.",
     size_small: "small", size_medium: "medium", size_large: "large",
     verdict_detected: "{size} pothole detected ({pct}% confident)",
     verdict_rejected: "No pothole confirmed",
@@ -288,7 +288,7 @@ const I18N = {
     chip_draft: "ಡ್ರಾಫ್ಟ್", chip_sent: "ಕಳುಹಿಸಲಾಗಿದೆ", chip_queued: "ಇಮೇಲ್‌ನಲ್ಲಿ ತೆರೆಯಲಾಗಿದೆ", chip_rejected: "ಗುಂಡಿ ಅಲ್ಲ",
     chip_unrouted: "ವ್ಯಾಪ್ತಿಯ ಹೊರಗೆ",
     no_location: "ಸ್ಥಳ ಪತ್ತೆಯಾಗಲಿಲ್ಲ.",
-    rural_road: "ಈ ರಸ್ತೆ ಯಾವುದೇ ಪಟ್ಟಣ ಅಥವಾ ನಗರದ ಒಳಗಿಲ್ಲ.",
+    rural_road: "ಈ ರಸ್ತೆ {body} ಗ್ರಾಮ ಪಂಚಾಯತ್‌ನಲ್ಲಿದೆ, ಪಟ್ಟಣ ಅಥವಾ ನಗರದಲ್ಲಿ ಅಲ್ಲ.",
     rural_road_help: "ಗುಂಡಿ ದೃಢಪಟ್ಟಿದೆ, ಆದರೆ ಇದು ಯಾವುದೇ ನಗರ ಸ್ಥಳೀಯ ಸಂಸ್ಥೆಯ ಹೊರಗಿದೆ. ಇದು ಲೋಕೋಪಯೋಗಿ ಇಲಾಖೆ ಅಥವಾ ಪಂಚಾಯತ್ ಎಂಜಿನಿಯರಿಂಗ್ ಇಲಾಖೆಗೆ ಸೇರಿದೆ, ಅವು ಇನ್ನೂ ಪಟ್ಟಿಯಲ್ಲಿಲ್ಲ. ಫೋಟೋ ಉಳಿಸಲಾಗಿದೆ.",
     no_address: "{body} ಗೆ ಪ್ರಕಟಿತ ವಿಳಾಸ ಇಲ್ಲ.",
     no_address_help: "ಗುಂಡಿ ದೃಢಪಟ್ಟಿದೆ ಮತ್ತು ಜವಾಬ್ದಾರ ಸಂಸ್ಥೆ ಗುರುತಿಸಲಾಗಿದೆ, ಆದರೆ ಅದರ ಅಧಿಕೃತ ಇಮೇಲ್ ಆ್ಯಪ್‌ನಲ್ಲಿ ಇಲ್ಲ, ಮತ್ತು ಊಹಿಸುವುದಿಲ್ಲ. ಫೋಟೋ ಉಳಿಸಲಾಗಿದೆ.",
@@ -578,7 +578,7 @@ function step(delta) {
 // city was "outside coverage", which was wrong and unhelpful.
 function unroutedTitle(r) {
   if (r.unrouted_reason === "no_location") return t("no_location");
-  if (r.unrouted_reason === "rural_road") return t("rural_road");
+  if (r.unrouted_reason === "rural_road") return t("rural_road", { body: r.unrouted_body || "a" });
   if (r.unrouted_reason === "no_address_for_body") return t("no_address", { body: r.unrouted_body || "" });
   return t("outside_coverage");
 }

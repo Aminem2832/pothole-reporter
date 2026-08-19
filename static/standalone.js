@@ -51,6 +51,7 @@
   // The rule that has not changed: a body we hold no verified address for is not routed.
   // Refusing is correct; addressing a citizen's complaint to a guess is not.
   const KGIS_TOWN_URL = "https://kgis.ksrsac.in/kgismaps/rest/services/Boundaries/Admin_Dynamic_New/MapServer/1/query";
+  const KGIS_GP_URL = "https://kgis.ksrsac.in/kgismaps/rest/services/Boundaries/GP_Boundary/MapServer/0/query";
   const OFFICER_TITLES = { CC: "Commissioner", CMC: "Chief Officer", TMC: "Chief Officer",
                            TP: "Chief Officer", NAC: "Chief Officer" };
 
@@ -308,21 +309,37 @@ Decide whether the photo clearly shows a pothole on a road surface.
   // Asks the state which body contains this point. Returns null when the point is
   // outside every urban local body, which is the rural case: those roads belong to PWD
   // or the panchayat engineering department, not to a municipality.
-  async function kgisBody(lat, lng) {
+  const kgisPoint = (base, lat, lng, fields) => {
     const geometry = encodeURIComponent(JSON.stringify(
       { x: lng, y: lat, spatialReference: { wkid: 4326 } }));
-    const url = `${KGIS_TOWN_URL}?geometry=${geometry}&geometryType=esriGeometryPoint`
-      + "&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json";
-    const res = await fetchWithTimeout(url, {}, 10000);
-    if (!res.ok) throw new Error("jurisdiction lookup unavailable");
-    const data = await res.json();
-    const attrs = data && data.features && data.features[0] && data.features[0].attributes;
-    if (!attrs) return null;                      // outside every ULB: rural
-    return {
-      name: attrs.KGISTownName || attrs.TownName || null,
-      type: (attrs.Town_Type || attrs.TownType || "").toUpperCase(),
-      lgd: String(attrs.LGD_TownCode || attrs.LGDTownCode || ""),
-    };
+    return `${base}?geometry=${geometry}&geometryType=esriGeometryPoint`
+      + `&spatialRel=esriSpatialRelIntersects&outFields=${fields}&returnGeometry=false&f=json`;
+  };
+
+  // Three outcomes, and telling them apart is the whole point. A town means a municipal
+  // body owns the road. No town but a gram panchayat means rural Karnataka, which belongs
+  // to PWD or the panchayat engineering department. Neither means the point is outside
+  // Karnataka altogether. An empty features array is a normal 200, not an error.
+  async function kgisJurisdiction(lat, lng) {
+    const town = await fetchWithTimeout(kgisPoint(KGIS_TOWN_URL, lat, lng,
+      "KGISTownName,Town_Type,KGISTownCode,LGD_TownCode"), {}, 10000);
+    if (!town.ok) throw new Error("jurisdiction lookup unavailable");
+    const t = (await town.json()).features || [];
+    if (t.length) {
+      const a = t[0].attributes || {};
+      return { kind: "town", name: a.KGISTownName || null,
+               type: (a.Town_Type || "").trim().toUpperCase(),
+               lgd: a.LGD_TownCode ? String(a.LGD_TownCode) : "" };
+    }
+    // Electronics City is the one town row with a blank type and no codes, so it lands
+    // here as a named body with no LGD: still refused, but by name rather than silently.
+    const gp = await fetchWithTimeout(kgisPoint(KGIS_GP_URL, lat, lng, "KGISGPName"), {}, 10000);
+    if (gp.ok) {
+      const g = (await gp.json()).features || [];
+      const name = g.length && (g[0].attributes || {}).KGISGPName;
+      if (name && String(name).trim()) return { kind: "rural", name: String(name).trim() };
+    }
+    return { kind: "outside_state" };
   }
 
   // Resolves the officer to address, or [null, null] with a reason. Every path that
@@ -348,16 +365,16 @@ Decide whether the photo clearly shows a pothole on a road surface.
       return hasLocation(lat, lng, address) ? offline() : [null, null, "no_location"];
     }
 
-    let body;
-    try { body = await kgisBody(lat, lng); }
+    let where;
+    try { where = await kgisJurisdiction(lat, lng); }
     catch (e) { return offline(); }               // GIS down: fall back, do not fail
 
-    if (!body) return [null, null, "rural_road"];
-    const entry = body.lgd && registry[body.lgd];
-    if (!entry || !entry.email) {
-      return [null, null, "no_address_for_body", body.name];
-    }
-    const title = entry.officer || OFFICER_TITLES[entry.type || body.type] || "Commissioner";
+    if (where.kind === "outside_state") return [null, null, "outside_area"];
+    if (where.kind === "rural") return [null, null, "rural_road", where.name];
+
+    const entry = where.lgd && registry[where.lgd];
+    if (!entry || !entry.email) return [null, null, "no_address_for_body", where.name];
+    const title = entry.officer || OFFICER_TITLES[entry.type || where.type] || "Chief Officer";
     return [`${title}, ${entry.name}${entry.short ? ` (${entry.short})` : ""}`, entry.email, null];
   }
 
