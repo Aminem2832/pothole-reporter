@@ -40,9 +40,32 @@
   };
   const HQ = ["Commissioner, Greater Bengaluru Authority (HQ)", "comm@bbmp.gov.in"];
 
-  // The officer directory and the bundled contracts are Bengaluru-only. Outside it
-  // there is no authority this app can name, and guessing sends a citizen's complaint
-  // to a body with no jurisdiction, so coverage is checked before anything is routed.
+  // Karnataka jurisdiction lookup.
+  //
+  // Which body owns a road is a question the state already answers: KGIS holds the
+  // boundary of every urban local body and returns the one containing a point, along
+  // with its class and its national LGD code. Keying the officer directory on that code
+  // rather than on a place name from a geocoder is what makes this work statewide: name
+  // matching guessed, a point-in-polygon lookup does not.
+  //
+  // The rule that has not changed: a body we hold no verified address for is not routed.
+  // Refusing is correct; addressing a citizen's complaint to a guess is not.
+  const KGIS_TOWN_URL = "https://kgis.ksrsac.in/kgismaps/rest/services/Boundaries/Admin_Dynamic_New/MapServer/1/query";
+  const OFFICER_TITLES = { CC: "Commissioner", CMC: "Chief Officer", TMC: "Chief Officer",
+                           TP: "Chief Officer", NAC: "Chief Officer" };
+
+  let _bodies = null;
+  async function bodies() {
+    if (_bodies) return _bodies;
+    try {
+      const res = await fetchWithTimeout("karnataka-bodies.json", {}, 8000);
+      _bodies = (await res.json()).bodies || {};
+    } catch (e) { _bodies = {}; }
+    return _bodies;
+  }
+
+  // Bengaluru is still resolvable without the network: the five corporations are the
+  // common case and a demo should not depend on a state GIS being reachable.
   const BLR = { minLat: 12.70, maxLat: 13.25, minLng: 77.25, maxLng: 77.90 };
   function inCoverage(lat, lng, address) {
     if (lat != null && lng != null && !Number.isNaN(lat) && !Number.isNaN(lng)) {
@@ -265,17 +288,60 @@ Decide whether the photo clearly shows a pothole on a road surface.
     } catch (e) { return null; }
   }
 
-  // Returns [null, null] when the pothole is outside the covered area. HQ stays the
-  // fallback only *within* Bengaluru, where it genuinely has jurisdiction.
-  function routeOfficer(address, covered) {
-    if (!covered) return [null, null];
-    if (address) {
-      const low = address.toLowerCase();
-      for (const [needle, officer] of Object.entries(OFFICERS)) {
-        if (low.includes(needle)) return officer;
+  // Asks the state which body contains this point. Returns null when the point is
+  // outside every urban local body, which is the rural case: those roads belong to PWD
+  // or the panchayat engineering department, not to a municipality.
+  async function kgisBody(lat, lng) {
+    const geometry = encodeURIComponent(JSON.stringify(
+      { x: lng, y: lat, spatialReference: { wkid: 4326 } }));
+    const url = `${KGIS_TOWN_URL}?geometry=${geometry}&geometryType=esriGeometryPoint`
+      + "&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json";
+    const res = await fetchWithTimeout(url, {}, 10000);
+    if (!res.ok) throw new Error("jurisdiction lookup unavailable");
+    const data = await res.json();
+    const attrs = data && data.features && data.features[0] && data.features[0].attributes;
+    if (!attrs) return null;                      // outside every ULB: rural
+    return {
+      name: attrs.KGISTownName || attrs.TownName || null,
+      type: (attrs.Town_Type || attrs.TownType || "").toUpperCase(),
+      lgd: String(attrs.LGD_TownCode || attrs.LGDTownCode || ""),
+    };
+  }
+
+  // Resolves the officer to address, or [null, null] with a reason. Every path that
+  // cannot name a real body returns nothing rather than a plausible-looking guess.
+  async function routeOfficer(address, lat, lng) {
+    const registry = await bodies();
+
+    // Bengaluru without the network: the common case must not depend on the state GIS.
+    const offline = () => {
+      if (!inCoverage(lat, lng, address)) return [null, null, "outside_area"];
+      if (address) {
+        const low = address.toLowerCase();
+        for (const [code, b] of Object.entries(registry)) {
+          if (b.email && low.includes(b.name.toLowerCase())) {
+            return [`${b.officer}, ${b.name}${b.short ? ` (${b.short})` : ""}`, b.email, null];
+          }
+        }
       }
+      return [HQ[0], HQ[1], null];
+    };
+
+    if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
+      return hasLocation(lat, lng, address) ? offline() : [null, null, "no_location"];
     }
-    return HQ;
+
+    let body;
+    try { body = await kgisBody(lat, lng); }
+    catch (e) { return offline(); }               // GIS down: fall back, do not fail
+
+    if (!body) return [null, null, "rural_road"];
+    const entry = body.lgd && registry[body.lgd];
+    if (!entry || !entry.email) {
+      return [null, null, "no_address_for_body", body.name];
+    }
+    const title = entry.officer || OFFICER_TITLES[entry.type || body.type] || "Commissioner";
+    return [`${title}, ${entry.name}${entry.short ? ` (${entry.short})` : ""}`, entry.email, null];
   }
 
   function distMeters(lat1, lng1, lat2, lng2) {
@@ -548,8 +614,9 @@ ${S.name}`;
 
     if (accepted) progress(pmsg("finalize"));
     const address = accepted ? await geoP : null;
-    const covered = accepted && (coordCoverage !== null ? coordCoverage : inCoverage(lat, lng, address));
-    const [officerName, officerEmail] = accepted ? routeOfficer(address, covered) : [null, null];
+    const [officerName, officerEmail, unroutedReason, bodyName] = accepted
+      ? await routeOfficer(address, lat, lng) : [null, null, null, null];
+    const covered = accepted && !!officerEmail;
     const tender = accepted && covered
       ? await (tenderP || matchTender(address).catch(() => null))
       : null;
@@ -571,8 +638,8 @@ ${S.name}`;
       status: accepted ? (covered ? "draft" : "unrouted") : "rejected",
       // Distinguishes "we know where this is and do not cover it" from "we never got a
       // fix", which are the same status but very different things to tell someone.
-      unrouted_reason: accepted && !covered
-        ? (hasLocation(lat, lng, address) ? "outside_area" : "no_location") : null,
+      unrouted_reason: accepted && !covered ? (unroutedReason || "outside_area") : null,
+      unrouted_body: accepted && !covered ? (bodyName || null) : null,
       officer_name: officerName, officer_email: officerEmail,
       tender_number: tender ? tender.tender_number : null,
       contractor: tender ? tender.contractor : null,

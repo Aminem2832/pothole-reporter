@@ -1,0 +1,45 @@
+{
+ "_comment": "Karnataka local bodies keyed by LGD town code, the stable national identifier that the KGIS jurisdiction lookup returns. 'officer' is the title to address: corporations have a Commissioner, municipal councils and town panchayats have a Chief Officer. A body absent from this file, or present with an empty email, is deliberately unroutable: the app refuses rather than sending a citizen's complaint to a guessed address. Every entry records where its address was read from.",
+ "bodies": {
+  "305851": {
+   "name": "Bengaluru Central City Corporation",
+   "short": "BCCC",
+   "type": "CC",
+   "officer": "Commissioner",
+   "email": "commissionerbccc@gmail.com",
+   "source": "official GBA site, verified Aug 2026"
+  },
+  "305853": {
+   "name": "Bengaluru North City Corporation",
+   "short": "BNCC",
+   "type": "CC",
+   "officer": "Commissioner",
+   "email": "bengalurunorthcitycorporation@gmail.com",
+   "source": "official GBA site, verified Aug 2026"
+  },
+  "305850": {
+   "name": "Bengaluru East City Corporation",
+   "short": "BECC",
+   "type": "CC",
+   "officer": "Commissioner",
+   "email": "commissioner.becc@gmail.com",
+   "source": "official GBA site, verified Aug 2026"
+  },
+  "305852": {
+   "name": "Bengaluru South City Corporation",
+   "short": "BSCC",
+   "type": "CC",
+   "officer": "Commissioner",
+   "email": "comm.south.gba@gmail.com",
+   "source": "official GBA site, verified Aug 2026"
+  },
+  "305854": {
+   "name": "Bengaluru West City Corporation",
+   "short": "BWCC",
+   "type": "CC",
+   "officer": "Commissioner",
+   "email": "commissioner.bwcc@gmail.com",
+   "source": "official GBA site, verified Aug 2026"
+  }
+ }
+}
