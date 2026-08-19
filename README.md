@@ -34,7 +34,7 @@ resolved by the pipeline on the phone.
 |---|---|
 | Verdict | **medium pothole**, confidence 0.78 |
 | Description | Two medium-sized potholes (approx. 30–60 cm) on the near center-right lane of the road; uneven surface may cause hazard to two-wheelers. |
-| Address | 17th Main Road, Sector 3, HSR Layout, Bengaluru South City Corporation, Bengaluru, Bangalore South, Bengaluru Urban, Karnataka, 560102, India |
+| Address | 17th Main Road, Sector 3, HSR Layout, Bengaluru, 560102 |
 | Routed to | Commissioner, Bengaluru South City Corporation (BSCC) |
 | Probable contract | `BBMP/2024-25/RD/WORK_INDENT3877` |
 | Contractor | SHARANAPPA SANGAMESH( SANGAMESH INFRASTRUCTURE INDIA PRIVATE LIMITED ) |
@@ -44,17 +44,18 @@ The complaint it drafted, which the app opens in your email app for you to send:
 ```text
 Dear Commissioner, Bengaluru South City Corporation (BSCC),
 
-I would like to report a pothole that needs urgent repair.
+I would like to report a pothole that needs repair.
 
-Location: 17th Main Road, Sector 3, HSR Layout, Bengaluru South City Corporation, Bengaluru, Bangalore South, Bengaluru Urban, Karnataka, 560102, India
+Location: 17th Main Road, Sector 3, HSR Layout, Bengaluru, 560102
 Coordinates: 12.911500, 77.642700
 Map link: https://maps.google.com/?q=12.911500,77.642700
 Approximate size: medium
-Details: Two medium-sized potholes (approx. 30–60 cm) on the near center-right lane of the road; uneven surface may cause hazard to two-wheelers.
 
-A photograph of the pothole is attached to this email. This pothole poses a danger to two wheeler riders and other road users. I request the city corporation to inspect and repair it at the earliest, and to route it to the contractor responsible if this road section is still under a maintenance warranty. I am also filing this grievance on Sahaaya so it can be tracked to resolution.
+PFA image. This pothole poses a danger to two wheeler riders and other road users. I request the city corporation to inspect and repair it at the earliest, and to route it to the contractor responsible if this road section is still under a maintenance warranty.
 
-Public procurement records indicate this road stretch probably falls under tender BBMP/2024-25/RD/WORK_INDENT3877 ("Pothole Filling Works under Maintenance Works in Ward No. 221-HSR Layout for the year 2024-25 in Bommanahalli Division."), published on 13-09-2024, with SHARANAPPA SANGAMESH( SANGAMESH INFRASTRUCTURE INDIA PRIVATE LIMITED ) recorded as the winning bidder. On the published date alone it may be possibly still within the maintenance period. I am not asserting these details as established fact: they come from a text match against public tender records and I request that the corporation verify them against the tender documents. If a defect liability or maintenance period is in force, I request that the repair be carried out by the responsible contractor at no additional cost to the corporation.
+Public procurement records indicate this road stretch probably falls under tender BBMP/2024-25/RD/WORK_INDENT3877 ("Pothole Filling Works under Maintenance Works in Ward No. 221-HSR Layout for the year 2024-25 in Bommanahalli Division."), published on 13-09-2024, with SHARANAPPA SANGAMESH( SANGAMESH INFRASTRUCTURE INDIA PRIVATE LIMITED ) recorded as the winning bidder, and it may still be within the maintenance period.
+
+If the defect liability or maintenance period is in force, I request that the repair be carried out by the contractor at no additional cost to the corporation. This is a probable record match; kindly verify against the tender documents.
 
 Thank you for your service to the city.
 
