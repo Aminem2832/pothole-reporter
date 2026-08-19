@@ -412,8 +412,17 @@ Decide whether the photo clearly shows a pothole on a road surface.
       }
     }
     if (!tokens.size) return null;
+    // A complaint only ever reaches a municipal officer: rural and out-of-state reports
+    // refuse to route, so the addressee is always a Commissioner or Chief Officer. They
+    // can enforce their own body's works (DMA contracts, plus legacy BBMP ones in
+    // Bengaluru) but hold no standing over a state PWD, RDPR panchayat or irrigation
+    // contract. Naming one of those in their letter points them at work that is not
+    // theirs to act on, so those contracts are not candidates at all. Widen this list
+    // when the app learns to address PWD and panchayat engineers directly.
     const scored = [];
     for (const t of await tenders()) {
+      const agency = (t.tn || "").split("/")[0].toUpperCase();
+      if (agency !== "DMA" && agency !== "BBMP") continue;
       const hay = (t.t + " " + t.loc).toLowerCase();
       let score = 0;
       for (const tok of tokens) if (hay.includes(tok)) score++;
@@ -423,18 +432,19 @@ Decide whether the photo clearly shows a pothole on a road surface.
     const candidates = scored.slice(0, 25).map((x) => x[1]);
     if (!candidates.length) return null;
     const listing = candidates.map((t, i) =>
-      `${i}: ${t.t.slice(0, 150)} | ${t.loc} | contractor: ${t.c || "not named"} | awarded: ${t.d}`).join("\n");
-    const prompt = `You match a pothole's location to Bengaluru road-work contracts.
+      `${i}: ${t.t.slice(0, 150)} | ${t.loc} | contractor: ${t.c || "not named"} | published: ${t.d}`).join("\n");
+    const prompt = `You match a pothole's location to Karnataka municipal road-work contracts.
 The pothole's reverse-geocoded address is:
 ${address}
 
-Candidate contracts (index: work description | division | contractor | awarded):
+Candidate contracts (index: work description | division | contractor | published):
 ${listing}
 
 Pick the single contract whose work description covers this exact road stretch or
-its immediate locality (same layout, ward or named road). Road names repeat across
-Bengaluru localities, so the locality and ward context must agree, not just the
-road name. A ward-wide maintenance or pothole-filling contract for the pothole's
+its immediate locality (same layout, ward or named road). Road and locality names
+repeat across Karnataka, and these candidates are drawn from the whole state, so the
+town and ward context must agree, not just the road name. A contract in a different
+town is wrong however well the road name matches. A ward-wide maintenance or pothole-filling contract for the pothole's
 own layout or ward is a valid match. If no candidate clearly covers this location,
 match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     let m;

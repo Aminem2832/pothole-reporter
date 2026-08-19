@@ -109,6 +109,11 @@ The APK bundles 42,283 awarded road-work contracts pulled from KPPP, Karnataka's
 procurement portal, covering the whole state. When a match clears a confidence gate the
 complaint names the tender, always as a probable match for the officer to verify.
 
+Only the addressed officer's own works are considered. A Commissioner or Chief Officer
+can enforce their body's contracts but has no standing over a state PWD, panchayat or
+irrigation contract, so those 23,311 rows are never named in their letter even when the
+road name matches well.
+
 The portal's search results do not carry the winning bidder, so only the 1,124 contracts
 from the Bengaluru snapshot name a contractor; elsewhere the complaint names the tender
 and says plainly that no bidder is recorded rather than inventing one. Award records

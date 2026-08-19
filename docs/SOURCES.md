@@ -97,6 +97,9 @@ and should not be strengthened.
 - 137 of Karnataka's 319 local bodies have no address in the file, because their district
   pages publish none. Those reports refuse to route.
 - 41,159 of the 42,283 contracts have no winning bidder recorded, for the reason above.
+- Only the 18,972 municipal (DMA and BBMP) contracts are eligible to be named, because
+  the app addresses municipal officers and the other 23,311 belong to the PWD, panchayats
+  or irrigation departments, which those officers do not control.
 - The road-work filter matches on title keywords, so the candidate pool is inclusive by
   design; the confidence gate on the match is what keeps weak candidates out of a
   complaint.
