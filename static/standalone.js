@@ -54,6 +54,8 @@
     }
     return false; // no location at all: we cannot claim to know who is responsible
   }
+  const hasLocation = (lat, lng, address) =>
+    (lat != null && lng != null && !Number.isNaN(lat) && !Number.isNaN(lng)) || !!address;
 
   const DETECT_PROMPT = `You are inspecting a road photo taken in Bengaluru for a civic complaint app.
 
@@ -99,20 +101,51 @@ Decide whether the photo clearly shows a pothole on a road surface.
 
   // Fatal means "fails the same way without streaming", so retrying plain is pointless.
   const fatal = (e) => { e.fatal = true; return e; };
+  // A stalled request is worse than a failed one: without this a lost connection
+  // leaves the UI on a spinner with no end, and a drive quietly stops forever.
+  const REQUEST_TIMEOUT_MS = 30000;
+
+  async function fetchWithTimeout(url, init, ms = REQUEST_TIMEOUT_MS) {
+    const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = setTimeout(() => ctl && ctl.abort(), ms);
+    try {
+      return await fetch(url, ctl ? { ...init, signal: ctl.signal } : init);
+    } catch (e) {
+      if (e && (e.name === "AbortError" || /abort/i.test(e.message || ""))) {
+        throw new Error("The network did not respond. Check the connection and try again.");
+      }
+      // Platform network errors read like `Unable to resolve host "api.openai.com"`.
+      // Nobody watching a demo should be shown that.
+      throw new Error("Could not reach OpenAI. Check the connection and try again.");
+    } finally { clearTimeout(timer); }
+  }
+
+  // Never surface a provider's response body: it is JSON, it is long, and on a
+  // projected screen it reads as a crash.
+  async function statusError(res) {
+    const bad = mapStatus(res);
+    if (bad) return bad;
+    if (res.status === 400) return new Error("OpenAI rejected the request. If this persists, the app needs an update.");
+    if (res.status === 408 || res.status === 504) return new Error("OpenAI timed out. Try again.");
+    if (res.status >= 500) return new Error("OpenAI is having trouble right now. Try again in a moment.");
+    return new Error("OpenAI could not process that image. Try again.");
+  }
+
   function mapStatus(res) {
     if (res.status === 401) return fatal(new Error("OpenAI rejected the API key. Check it in settings."));
-    if (res.status === 429) return fatal(new Error("Rate limited by OpenAI. Try again in a minute."));
+    if (res.status === 403) return fatal(new Error("This API key is not allowed to use the model. Check the key in settings."));
+    // 429 covers both throttling and an exhausted balance, and telling someone to
+    // wait a minute for a spent quota sends them in circles.
+    if (res.status === 429) return fatal(new Error("OpenAI refused: rate limit or the key's credit is exhausted. Check the account."));
     return null;
   }
 
   async function oai(body) {
     if (!S.key) throw new Error("OpenAI API key missing. Tap the gear icon and paste it.");
-    const res = await fetch(OAI_URL, {
+    const res = await fetchWithTimeout(OAI_URL, {
       method: "POST", headers: authHeaders(), body: JSON.stringify(withSpeedDefaults(body)),
     });
-    const bad = mapStatus(res);
-    if (bad) throw bad;
-    if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${(await res.text()).slice(0, 160)}`);
+    if (!res.ok) throw await statusError(res);
     const data = await res.json();
     const msg = (data.output || []).find((o) => o.type === "message");
     const text = msg && msg.content && msg.content.find((c) => c.type === "output_text");
@@ -158,13 +191,11 @@ Decide whether the photo clearly shows a pothole on a road surface.
 
   async function oaiStream(body, onEarly) {
     if (!S.key) throw new Error("OpenAI API key missing. Tap the gear icon and paste it.");
-    const res = await fetch(OAI_URL, {
+    const res = await fetchWithTimeout(OAI_URL, {
       method: "POST", headers: authHeaders(),
       body: JSON.stringify(withSpeedDefaults({ ...body, stream: true })),
     });
-    const bad = mapStatus(res);
-    if (bad) throw bad;
-    if (!res.ok) throw new Error(`OpenAI error ${res.status}: ${(await res.text()).slice(0, 160)}`);
+    if (!res.ok) throw await statusError(res);
 
     const state = { buf: "", text: "", early: false };
     if (res.body && typeof res.body.getReader === "function") {
@@ -228,7 +259,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
   // ---------- location ----------
   async function reverseGeocode(lat, lng) {
     try {
-      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&zoom=17`);
+      const res = await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&zoom=17`, {}, 12000);
       if (!res.ok) return null;
       return (await res.json()).display_name || null;
     } catch (e) { return null; }
@@ -324,10 +355,14 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
       if (ageYears <= 1) { warranty = "likely still within the defect liability period"; warranty_code = "dlp"; }
       else if (ageYears <= 3) { warranty = "possibly still within the maintenance period"; warranty_code = "maint"; }
     }
-    const contractor = t.c || "contractor not named in the award record";
+    // Records without a winner are common in this dataset. Naming nobody is correct;
+    // a placeholder sentence read as a person's name in the Kannada draft.
+    const contractor = t.c || null;
     return {
       tender_number: t.tn, contractor, title: t.t, published: t.d, warranty, warranty_code,
-      note: `Probable contract: ${t.tn}, ${contractor}, awarded ${t.d}`,
+      note: contractor
+        ? `Probable contract: ${t.tn}, ${contractor}, published ${t.d}`
+        : `Probable contract: ${t.tn}, contractor not listed, published ${t.d}`,
     };
   }
 
@@ -383,8 +418,8 @@ ${S.name}`;
     if (tender) {
       const warrantyKn = ({ dlp: "ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅವಧಿಯಲ್ಲಿ ಇನ್ನೂ ಇರುವ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು", maint: "ನಿರ್ವಹಣಾ ಅವಧಿಯಲ್ಲಿ ಇನ್ನೂ ಇರುವ ಸಾಧ್ಯತೆ ಇದೆ", record: "ಈ ಭಾಗದ ದಾಖಲೆಯಲ್ಲಿದೆ" })[tender.warranty_code || "record"];
       const para = kn
-        ? `ಸಾರ್ವಜನಿಕ ಖರೀದಿ ದಾಖಲೆಗಳ ಪ್ರಕಾರ ಈ ರಸ್ತೆ ಭಾಗ ಟೆಂಡರ್ ${tender.tender_number} ("${tender.title.slice(0, 140).trim()}") ಅಡಿಯಲ್ಲಿ ಬರುವ ಸಾಧ್ಯತೆ ಇದೆ. ಇದನ್ನು ${tender.published} ರಂದು ${tender.contractor} ಅವರಿಗೆ ನೀಡಲಾಗಿದ್ದು, ${warrantyKn}. ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅಥವಾ ನಿರ್ವಹಣಾ ಅವಧಿ ಜಾರಿಯಲ್ಲಿದ್ದರೆ, ಪಾಲಿಕೆಗೆ ಹೆಚ್ಚುವರಿ ವೆಚ್ಚವಿಲ್ಲದೆ ಗುತ್ತಿಗೆದಾರರಿಂದಲೇ ದುರಸ್ತಿ ಮಾಡಿಸಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ. ಇದು ಸಂಭಾವ್ಯ ದಾಖಲೆ ಹೊಂದಾಣಿಕೆ; ದಯವಿಟ್ಟು ಟೆಂಡರ್ ದಾಖಲೆಗಳೊಂದಿಗೆ ಪರಿಶೀಲಿಸಿ.`
-        : `Public procurement records indicate this road stretch probably falls under tender ${tender.tender_number} ("${tender.title.slice(0, 140).trim()}"), awarded on ${tender.published} to ${tender.contractor}, and is ${tender.warranty}. If the defect liability or maintenance period is in force, I request that the repair be carried out by the contractor at no additional cost to the corporation. This is a probable record match; kindly verify against the tender documents.`;
+        ? `ಸಾರ್ವಜನಿಕ ಖರೀದಿ ದಾಖಲೆಗಳ ಪ್ರಕಾರ ಈ ರಸ್ತೆ ಭಾಗ ಟೆಂಡರ್ ${tender.tender_number} ("${tender.title.slice(0, 140).trim()}") ಅಡಿಯಲ್ಲಿ ಬರುವ ಸಾಧ್ಯತೆ ಇದೆ. ಈ ಟೆಂಡರ್ ${tender.published} ರಂದು ಪ್ರಕಟವಾಗಿದೆ${tender.contractor ? `, ಮತ್ತು ದಾಖಲೆಯಲ್ಲಿ ಗೆದ್ದ ಬಿಡ್‌ದಾರರಾಗಿ ${tender.contractor} ಎಂದು ನಮೂದಿಸಲಾಗಿದೆ` : `, ಆದರೆ ಗೆದ್ದ ಬಿಡ್‌ದಾರರ ಹೆಸರು ದಾಖಲೆಯಲ್ಲಿ ಇಲ್ಲ`}. ಪ್ರಕಟಣೆಯ ದಿನಾಂಕದ ಆಧಾರದ ಮೇಲೆ ಮಾತ್ರ ಇದು ${warrantyKn} ಎಂಬ ಸಾಧ್ಯತೆ ಇದೆ. ಇವು ಖಚಿತ ಸಂಗತಿಗಳೆಂದು ನಾನು ಹೇಳುತ್ತಿಲ್ಲ: ಇವು ಸಾರ್ವಜನಿಕ ಟೆಂಡರ್ ದಾಖಲೆಗಳ ಪಠ್ಯ ಹೊಂದಾಣಿಕೆಯಿಂದ ಬಂದವು, ದಯವಿಟ್ಟು ಟೆಂಡರ್ ದಾಖಲೆಗಳೊಂದಿಗೆ ಪರಿಶೀಲಿಸಿ. ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅಥವಾ ನಿರ್ವಹಣಾ ಅವಧಿ ಜಾರಿಯಲ್ಲಿದ್ದರೆ, ಪಾಲಿಕೆಗೆ ಹೆಚ್ಚುವರಿ ವೆಚ್ಚವಿಲ್ಲದೆ ಜವಾಬ್ದಾರ ಗುತ್ತಿಗೆದಾರರಿಂದಲೇ ದುರಸ್ತಿ ಮಾಡಿಸಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ.`
+        : `Public procurement records indicate this road stretch may fall under tender ${tender.tender_number} ("${tender.title.slice(0, 140).trim()}"), published on ${tender.published}${tender.contractor ? `, with ${tender.contractor} recorded as the winning bidder` : ", with no winning bidder recorded"}. On the published date alone it may be ${tender.warranty}. I am not asserting these details as established fact: they come from a text match against public tender records and I request that the corporation verify them against the tender documents. If a defect liability or maintenance period is in force, I request that the repair be carried out by the responsible contractor at no additional cost to the corporation.`;
       body = kn
         ? body.replace("\n\nನಗರ ಸೇವೆಗೆ", `\n\n${para}\n\nನಗರ ಸೇವೆಗೆ`)
         : body.replace("\n\nThank you", `\n\n${para}\n\nThank you`);
@@ -531,6 +566,10 @@ ${S.name}`;
       is_pothole: a.is_pothole ? 1 : 0, size: a.size, confidence: a.confidence,
       description: a.description, email_subject: subject, email_body: body,
       status: accepted ? (covered ? "draft" : "unrouted") : "rejected",
+      // Distinguishes "we know where this is and do not cover it" from "we never got a
+      // fix", which are the same status but very different things to tell someone.
+      unrouted_reason: accepted && !covered
+        ? (hasLocation(lat, lng, address) ? "outside_area" : "no_location") : null,
       officer_name: officerName, officer_email: officerEmail,
       tender_number: tender ? tender.tender_number : null,
       contractor: tender ? tender.contractor : null,

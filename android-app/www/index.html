@@ -63,7 +63,7 @@
   <div class="row" style="justify-content:space-between;align-items:flex-start">
     <div>
       <h1>Pothole Reporter</h1>
-      <div class="sub" id="subTitle">Shoot it. Verify it. Report it to BBMP.</div>
+      <div class="sub" id="subTitle">Shoot it. Verify it. Report it to the right officer.</div>
     </div>
     <button class="ghost" id="gearBtn" style="flex:none;padding:10px 14px" aria-label="Settings">&#9881;&#65039;</button>
   </div>
@@ -141,8 +141,9 @@
       <input type="text" id="setName" placeholder="Gaurav Sen">
       <label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13px;color:#f2f2f4">
         <input type="checkbox" id="setDebug" style="width:18px;height:18px;accent-color:var(--accent)">
-        <span id="debugLabel">Debug mode: keep every drive frame for review</span>
+        <span id="debugLabel">Debug mode: keep the drive video after analysing it</span>
       </label>
+      <div class="meta" id="debugNote"></div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:#f2f2f4">
         <input type="checkbox" id="setKeepFrames" style="width:18px;height:18px;accent-color:var(--accent)">
         <span id="keepFramesLabel">Save every analysed frame to the device</span>
@@ -173,7 +174,7 @@ const $ = (id) => document.getElementById(id);
 // ---------- i18n (English / Kannada) ----------
 const I18N = {
   en: {
-    sub: "Shoot it. Verify it. Report it to BBMP.",
+    sub: "Shoot it. Verify it. Report it to the right officer.",
     report_btn: "&#128247; &nbsp;Report a pothole",
     drive_btn: "&#128663; &nbsp;Drive mode",
     your_reports: "Your reports",
@@ -182,28 +183,37 @@ const I18N = {
     settings_title: "Settings",
     key_label: "OpenAI API key (stored only on this device)",
     name_label: "Your name (signs the complaints)",
-    debug_label: "Debug mode: keep every drive frame for review",
+    debug_label: "Debug mode: keep the drive video after analysing it",
     settings_note: "Complaints are always created as email drafts addressed to the concerned corporation officer. Nothing sends until you press send in your email app.",
     wipe_btn: "Delete all reports and photos",
     welcome_hint: "Welcome. Paste your OpenAI API key to enable pothole detection. It is stored only on this device.",
     back: "Back", save: "Save", discard: "Discard", del: "Delete", email_btn: "Email", stop: "&#9632; Stop", working: "Working...",
     chip_draft: "Draft", chip_sent: "Sent", chip_queued: "Opened in email", chip_rejected: "Not a pothole",
     chip_unrouted: "Outside coverage",
+    no_location: "The location could not be determined.",
+    no_location_help: "A pothole was confirmed, but without a GPS fix the app cannot tell which corporation is responsible, so it will not address a complaint. The photo is saved: reopen it once location is available.",
     review_btn: "Review and label frames", export_btn: "Export labelled dataset",
     dash_btn: "&#128506;&#65039; &nbsp;Your contribution", dash_title: "Your contribution",
-    dash_range: "{days} days of reporting &middot; first on {first}",
+    dash_range: "{days} of reporting &middot; first on {first}",
     dash_empty: "No potholes reported yet. Your map fills up as you drive.",
+    day_one: "1 day", day_many: "{n} days",
     stat_found: "potholes found", stat_reported: "complaints sent", stat_frames: "frames checked",
     stat_drives: "drives", stat_footage: "MB of footage", stat_km: "km of road covered",
     by_size: "By size", by_area: "By corporation", map_pins: "{n} pinned",
     map_offline: "Map tiles need a connection. Points are still plotted below.",
     zoom_hint: "Pinch to zoom &middot; drag to pan &middot; double tap to reset",
     rec_suffix: "&middot; recording {mb} MB", rec_failed: "&middot; not recording",
+    net_trouble: "Connection trouble, still scanning ({n} frames waiting)",
+    camera_lost: "Camera paused (another app may be using it). Scanning resumes automatically.",
+    drive_end_failed: "{n} frames could not be checked because of the connection.",
     footage_line: "Footage: {mb} MB &middot; {segments} clips",
     analyse_btn: "Analyse footage", delete_footage: "Delete footage",
     analysing: "Frame {i} of {n} &middot; {found} new",
     analyse_done: "Footage analysed: {found} new potholes from {n} frames.",
     analyse_none: "No footage stored for this drive.",
+    analysing_failed: "&middot; {n} failed",
+    analyse_incomplete: "Could not finish: {failed} of {n} frames were not checked ({err}) So no result is being claimed, and the video has been kept.",
+    debug_note: "On: the video survives analysis, so a drive can be re-examined or re-run against a better model. Off: the video is deleted once its potholes have been extracted.",
     keep_frames_label: "Save every analysed frame to the device",
     keep_frames_note: "Writes each frame the AI checked, with its verdict, into Documents/pothole-frames on this phone. Visible in the Files app, and the raw material for building an evaluation set. Adds up fast: roughly 300 KB a frame.",
     frames_saved: "{n} frames written to Documents/{dir}.",
@@ -261,28 +271,37 @@ const I18N = {
     settings_title: "ಸೆಟ್ಟಿಂಗ್ಸ್",
     key_label: "OpenAI API ಕೀ (ಈ ಸಾಧನದಲ್ಲಿ ಮಾತ್ರ ಸಂಗ್ರಹ)",
     name_label: "ನಿಮ್ಮ ಹೆಸರು (ದೂರುಗಳಿಗೆ ಸಹಿ)",
-    debug_label: "ಡೀಬಗ್ ಮೋಡ್: ಪ್ರತಿ ಡ್ರೈವ್ ಫ್ರೇಮ್ ಅನ್ನು ಪರಿಶೀಲನೆಗೆ ಉಳಿಸಿ",
+    debug_label: "ಡೀಬಗ್ ಮೋಡ್: ವಿಶ್ಲೇಷಣೆಯ ನಂತರವೂ ಡ್ರೈವ್ ವಿಡಿಯೋ ಉಳಿಸಿ",
     settings_note: "ದೂರುಗಳು ಯಾವಾಗಲೂ ಸಂಬಂಧಿತ ಪಾಲಿಕೆ ಅಧಿಕಾರಿಗೆ ಉದ್ದೇಶಿಸಿದ ಇಮೇಲ್ ಡ್ರಾಫ್ಟ್ ಆಗಿ ರಚನೆಯಾಗುತ್ತವೆ. ನಿಮ್ಮ ಇಮೇಲ್ ಆ್ಯಪ್‌ನಲ್ಲಿ ನೀವು ಕಳುಹಿಸುವವರೆಗೆ ಏನೂ ಕಳುಹಿಸಲಾಗುವುದಿಲ್ಲ.",
     wipe_btn: "ಎಲ್ಲಾ ವರದಿ ಮತ್ತು ಫೋಟೋಗಳನ್ನು ಅಳಿಸಿ",
     welcome_hint: "ಸ್ವಾಗತ. ಗುಂಡಿ ಪತ್ತೆಗೆ ನಿಮ್ಮ OpenAI API ಕೀ ಅಂಟಿಸಿ. ಇದು ಈ ಸಾಧನದಲ್ಲಿ ಮಾತ್ರ ಸಂಗ್ರಹವಾಗುತ್ತದೆ.",
     back: "ಹಿಂದೆ", save: "ಉಳಿಸಿ", discard: "ತ್ಯಜಿಸಿ", del: "ಅಳಿಸಿ", email_btn: "ಇಮೇಲ್", stop: "&#9632; ನಿಲ್ಲಿಸಿ", working: "ನಡೆಯುತ್ತಿದೆ...",
     chip_draft: "ಡ್ರಾಫ್ಟ್", chip_sent: "ಕಳುಹಿಸಲಾಗಿದೆ", chip_queued: "ಇಮೇಲ್‌ನಲ್ಲಿ ತೆರೆಯಲಾಗಿದೆ", chip_rejected: "ಗುಂಡಿ ಅಲ್ಲ",
     chip_unrouted: "ವ್ಯಾಪ್ತಿಯ ಹೊರಗೆ",
+    no_location: "ಸ್ಥಳ ಪತ್ತೆಯಾಗಲಿಲ್ಲ.",
+    no_location_help: "ಗುಂಡಿ ದೃಢಪಟ್ಟಿದೆ, ಆದರೆ GPS ಇಲ್ಲದೆ ಯಾವ ಪಾಲಿಕೆ ಜವಾಬ್ದಾರಿ ಎಂದು ತಿಳಿಯದು, ಆದ್ದರಿಂದ ದೂರು ಸಿದ್ಧಪಡಿಸಿಲ್ಲ. ಫೋಟೋ ಉಳಿಸಲಾಗಿದೆ.",
     review_btn: "ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಗುರುತಿಸಿ", export_btn: "ಗುರುತಿಸಿದ ಡೇಟಾಸೆಟ್ ರಫ್ತು ಮಾಡಿ",
     dash_btn: "&#128506;&#65039; &nbsp;ನಿಮ್ಮ ಕೊಡುಗೆ", dash_title: "ನಿಮ್ಮ ಕೊಡುಗೆ",
-    dash_range: "{days} ದಿನಗಳ ವರದಿ &middot; ಮೊದಲನೆಯದು {first}",
+    dash_range: "{days} ವರದಿ &middot; ಮೊದಲನೆಯದು {first}",
     dash_empty: "ಇನ್ನೂ ಗುಂಡಿಗಳ ವರದಿ ಇಲ್ಲ. ಡ್ರೈವ್ ಮಾಡಿದಂತೆ ನಕ್ಷೆ ತುಂಬುತ್ತದೆ.",
+    day_one: "1 ದಿನ", day_many: "{n} ದಿನಗಳು",
     stat_found: "ಗುಂಡಿಗಳು ಪತ್ತೆ", stat_reported: "ದೂರುಗಳು ಕಳುಹಿಸಲಾಗಿದೆ", stat_frames: "ಫ್ರೇಮ್ ಪರಿಶೀಲನೆ",
     stat_drives: "ಡ್ರೈವ್‌ಗಳು", stat_footage: "MB ವಿಡಿಯೋ", stat_km: "ಕಿಮೀ ರಸ್ತೆ",
     by_size: "ಗಾತ್ರದ ಪ್ರಕಾರ", by_area: "ಪಾಲಿಕೆ ಪ್ರಕಾರ", map_pins: "{n} ಗುರುತಿಸಲಾಗಿದೆ",
     map_offline: "ನಕ್ಷೆಗೆ ಇಂಟರ್ನೆಟ್ ಬೇಕು. ಬಿಂದುಗಳು ಕೆಳಗೆ ತೋರಿಸಲಾಗಿದೆ.",
     zoom_hint: "ಜೂಮ್‌ಗೆ ಪಿಂಚ್ &middot; ಸರಿಸಲು ಎಳೆಯಿರಿ &middot; ಮರುಹೊಂದಿಸಲು ಡಬಲ್ ಟ್ಯಾಪ್",
     rec_suffix: "&middot; {mb} MB ರೆಕಾರ್ಡ್", rec_failed: "&middot; ರೆಕಾರ್ಡ್ ಆಗುತ್ತಿಲ್ಲ",
+    net_trouble: "ಸಂಪರ್ಕ ಸಮಸ್ಯೆ, ಇನ್ನೂ ಸ್ಕ್ಯಾನ್ ಆಗುತ್ತಿದೆ ({n} ಬಾಕಿ)",
+    camera_lost: "ಕ್ಯಾಮೆರಾ ವಿರಾಮದಲ್ಲಿದೆ (ಬೇರೆ ಆ್ಯಪ್ ಬಳಸುತ್ತಿರಬಹುದು). ತಾನಾಗಿಯೇ ಮುಂದುವರಿಯುತ್ತದೆ.",
+    drive_end_failed: "ಸಂಪರ್ಕದ ಕಾರಣ {n} ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಲಾಗಲಿಲ್ಲ.",
     footage_line: "ವಿಡಿಯೋ: {mb} MB &middot; {segments} ತುಣುಕುಗಳು",
     analyse_btn: "ವಿಡಿಯೋ ವಿಶ್ಲೇಷಿಸಿ", delete_footage: "ವಿಡಿಯೋ ಅಳಿಸಿ",
     analysing: "ಫ್ರೇಮ್ {i}/{n} &middot; {found} ಹೊಸ",
     analyse_done: "ವಿಶ್ಲೇಷಣೆ ಮುಗಿಯಿತು: {n} ಫ್ರೇಮ್‌ಗಳಿಂದ {found} ಹೊಸ ಗುಂಡಿಗಳು.",
     analyse_none: "ಈ ಡ್ರೈವ್‌ಗೆ ವಿಡಿಯೋ ಇಲ್ಲ.",
+    analysing_failed: "&middot; {n} ವಿಫಲ",
+    analyse_incomplete: "ಪೂರ್ಣಗೊಳಿಸಲಾಗಲಿಲ್ಲ: {n} ರಲ್ಲಿ {failed} ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಲಾಗಿಲ್ಲ ({err}) ಆದ್ದರಿಂದ ಯಾವುದೇ ಫಲಿತಾಂಶ ಹೇಳುತ್ತಿಲ್ಲ, ವಿಡಿಯೋ ಉಳಿಸಲಾಗಿದೆ.",
+    debug_note: "ಆನ್: ವಿಶ್ಲೇಷಣೆಯ ನಂತರವೂ ವಿಡಿಯೋ ಉಳಿಯುತ್ತದೆ. ಆಫ್: ಗುಂಡಿಗಳನ್ನು ತೆಗೆದ ನಂತರ ವಿಡಿಯೋ ಅಳಿಸಲಾಗುತ್ತದೆ.",
     keep_frames_label: "ವಿಶ್ಲೇಷಿಸಿದ ಎಲ್ಲ ಫ್ರೇಮ್‌ಗಳನ್ನು ಸಾಧನದಲ್ಲಿ ಉಳಿಸಿ",
     keep_frames_note: "AI ಪರಿಶೀಲಿಸಿದ ಪ್ರತಿ ಫ್ರೇಮ್ ಮತ್ತು ಅದರ ತೀರ್ಮಾನವನ್ನು Documents/pothole-frames ನಲ್ಲಿ ಬರೆಯುತ್ತದೆ. ಫೈಲ್ಸ್ ಆ್ಯಪ್‌ನಲ್ಲಿ ಕಾಣುತ್ತದೆ. ಪ್ರತಿ ಫ್ರೇಮ್ ಸುಮಾರು 300 KB.",
     frames_saved: "{n} ಫ್ರೇಮ್‌ಗಳನ್ನು Documents/{dir} ನಲ್ಲಿ ಬರೆಯಲಾಗಿದೆ.",
@@ -364,6 +383,7 @@ function applyLang() {
   $("keyLabel").textContent = t("key_label");
   $("nameLabel").textContent = t("name_label");
   $("debugLabel").textContent = t("debug_label");
+  $("debugNote").innerHTML = t("debug_note");
   $("keepFramesLabel").textContent = t("keep_frames_label");
   $("keepFramesNote").innerHTML = t("keep_frames_note");
   $("settingsNote").textContent = t("settings_note");
@@ -552,8 +572,8 @@ function openDetail(r, list) {
           ${t("verdict_detected", { size: tSize(r.size).toUpperCase(), pct: (r.confidence * 100).toFixed(0) })}
         </div>
         ${r.address ? `<div class="meta">&#128205; ${r.address}</div>` : ""}
-        <div class="meta" style="color:var(--bad)">&#9888; ${t("outside_coverage")}</div>
-        <div class="meta">${t("outside_coverage_help")}</div>
+        <div class="meta" style="color:var(--bad)">&#9888; ${r.unrouted_reason === "no_location" ? t("no_location") : t("outside_coverage")}</div>
+        <div class="meta">${r.unrouted_reason === "no_location" ? t("no_location_help") : t("outside_coverage_help")}</div>
         <div class="btn-row">
           <button class="ghost" id="backBtn">${t("back")}</button>
           <button class="ghost danger" id="discardBtn">${t("del")}</button>
@@ -743,6 +763,11 @@ async function driveTick() {
   for (const s of drive.foundSpots) {
     if (distMeters(s, pos) < 15) { updateHud(); return; }
   }
+  const track = drive.stream && drive.stream.getVideoTracks && drive.stream.getVideoTracks()[0];
+  if (!track || track.readyState !== "live" || track.muted || video.readyState < 2) {
+    updateHud(t("camera_lost"));
+    return;   // a call or another app took the camera: the preview is a still image now
+  }
   if (drive.stillBusy) return; // one still capture at a time; the camera track is not reentrant
   drive.lastCapPos = pos;
   drive.lastCapAt = Date.now();
@@ -769,10 +794,13 @@ async function driveTick() {
       if (res.found) { tally.found++; spots.push(pos); }
     })
     .catch((e) => {
+      tally.failed = (tally.failed || 0) + 1;
       if (!drive) return;
       drive.errors++;
-      updateHud(e.message);
-      if (drive.errors >= 5) { const msg = e.message; stopDrive(); alert(t("drive_stopped") + msg); }
+      // Only a key or quota problem is worth ending a drive for: those never fix
+      // themselves. A dropped signal does, so keep scanning and say so.
+      if (e && e.fatal) { const msg = e.message; stopDrive(); alert(msg); return; }
+      updateHud(t("net_trouble", { n: drive.errors }));
     })
     .finally(() => { if (drive) { drive.inFlight--; updateHud(); } });
   drive.pending.push(p);
@@ -803,9 +831,10 @@ function stopDrive() {
         gps_track: gpsTrack }) })
       .catch(() => {})
       .then(loadReports);
-    const summary = tally.found === 0
+    const failedNote = tally.failed ? " " + t("drive_end_failed", { n: tally.failed }) : "";
+    const summary = (tally.found === 0
       ? t("drive_end_zero", { checked: tally.checked, debug: localStorage.getItem("debug_mode") === "1" ? t("debug_saved_suffix") : "" })
-      : t("drive_end", { found: tally.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: tally.found }), checked: tally.checked });
+      : t("drive_end", { found: tally.found === 1 ? t("potholes_one", { n: 1 }) : t("potholes_many", { n: tally.found }), checked: tally.checked })) + failedNote;
     setTimeout(async () => {
       alert(summary);
       const mine = (await api("/api/footage").catch(() => []))
@@ -1066,6 +1095,7 @@ async function analyseFootage(driveId, driveRec) {
   const canvas = document.createElement("canvas");
   const pending = [];
   let found = 0, done = 0, planned = 0, elapsed = 0;
+  let failed = 0, consecutive = 0, lastErr = "", aborted = false;
   const saveToDisk = keepFrames();
   const manifest = [];
   let written = 0, writeFailed = false;
@@ -1104,6 +1134,7 @@ async function analyseFootage(driveId, driveRec) {
       const frameNo = planned - 1, atAbs = elapsed + at;
       pending.push(api("/api/frame", { method: "POST", body: fd })
         .then(async (r) => {
+          consecutive = 0;
           if (r && r.found) found++;
           // Every frame is written, not only the finds: an evaluation set is worthless
           // without the frames the model rejected.
@@ -1120,15 +1151,21 @@ async function analyseFootage(driveId, driveRec) {
                 : { is_pothole: false, skipped: !!(r && r.skipped) } });
           } catch (e) { writeFailed = true; }
         })
-        .catch(() => {})
+        .catch((e) => {
+          failed++; consecutive++;
+          lastErr = (e && e.message) || String(e);
+        })
         .finally(() => {
           done++;
-          $("progressText").innerHTML = t("analysing", { i: done, n: planned, found });
+          $("progressText").innerHTML = t("analysing", { i: done, n: planned, found })
+            + (failed ? " " + t("analysing_failed", { n: failed }) : "");
         }));
       if (pending.length >= MAX_IN_FLIGHT) await Promise.race(pending.splice(0, 1));
+      if (consecutive >= 5) { aborted = true; break; }
     }
     elapsed += meta.dur;
     URL.revokeObjectURL(url);
+    if (aborted) break;
   }
 
   await Promise.allSettled(pending);
@@ -1139,7 +1176,7 @@ async function analyseFootage(driveId, driveRec) {
   // stored, and the footage itself only survives in debug mode. Deleting it is safe
   // precisely because the analysis that just ran is what extracted everything wanted.
   let freed = 0;
-  if (!isDebug()) {
+  if (!isDebug() && !failed) {
     try {
       const before = (await api("/api/footage").catch(() => []))
         .filter((f) => String(f.drive_id) === String(driveId))
@@ -1153,9 +1190,14 @@ async function analyseFootage(driveId, driveRec) {
   const diskNote = !saveToDisk ? ""
     : (written ? " " + t("frames_saved", { n: written, dir: `${FRAME_DIR}/${driveId}` })
                : " " + t("frames_failed"));
-  alert(t("analyse_done", { found, n: planned })
+  // When frames failed, do not lead with a pothole count: "0 potholes" on a road that
+  // was never actually checked is the most damaging thing this screen could say.
+  const headline = failed
+    ? t("analyse_incomplete", { failed, n: planned, err: lastErr })
+    : t("analyse_done", { found, n: planned });
+  alert(headline
         + (freed ? " " + t("footage_freed", { mb: freed.toFixed(0) })
-                 : (isDebug() ? " " + t("footage_kept") : ""))
+                 : (isDebug() || failed ? " " + t("footage_kept") : ""))
         + diskNote);
 }
 
@@ -1179,7 +1221,8 @@ async function openDash() {
   const days = new Set(holes.map((r) => new Date(r.created_at * 1000).toDateString())).size;
   const first = holes.length ? fmtDate(Math.min(...holes.map((r) => r.created_at))) : "";
   $("dashTitle").textContent = t("dash_title");
-  $("dashRange").innerHTML = holes.length ? t("dash_range", { days, first }) : t("dash_empty");
+  const dayTxt = days === 1 ? t("day_one") : t("day_many", { n: days });
+  $("dashRange").innerHTML = holes.length ? t("dash_range", { days: dayTxt, first }) : t("dash_empty");
 
   const tile = (n, label) => `<div class="card" style="flex:1 1 30%;min-width:96px;margin:0;text-align:center">
       <div class="verdict" style="font-size:22px;margin:0">${n}</div>
