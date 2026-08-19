@@ -516,10 +516,13 @@ ${S.name}`;
     }
 
     progress(driveMode ? pmsg("capture") : pmsg("compress"));
-    // Drive Mode ran at 1280 until an eval showed it drops real potholes that survive
-    // at full size: distant, small defects lose just enough detail to fall under the
-    // confidence gate. Resolution is the one thing detection cannot get back.
-    const dataUrl = await toDataUrl(photo, 2000, 0.85, true);
+    // Measured on a real device: a 2000px frame is ~1.1 MB of base64 and every request
+    // is marshalled across the JS-to-native bridge, which made a live detection call
+    // take 13.5s median and stuttered the preview. The live pass therefore runs on a
+    // smaller frame; the recorded footage keeps full quality, so a pothole missed live
+    // is still recoverable by re-analysing the video. Single shots stay at full size:
+    // one photo, someone waiting, and no footage behind it.
+    const dataUrl = await toDataUrl(photo, driveMode ? 1024 : 2000, 0.85, true);
     // Geocoding runs in parallel with the AI calls; it never gates detection.
     const geoP = lat != null ? reverseGeocode(lat, lng).catch(() => null) : Promise.resolve(null);
     progress(pmsg("detect"));

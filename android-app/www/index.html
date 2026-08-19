@@ -145,6 +145,10 @@
       </label>
       <div class="meta" id="debugNote"></div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:#f2f2f4">
+        <input type="checkbox" id="setRecord" style="width:18px;height:18px;accent-color:var(--accent)">
+        <span id="recordLabel">Record video during a drive</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:#f2f2f4">
         <input type="checkbox" id="setKeepFrames" style="width:18px;height:18px;accent-color:var(--accent)">
         <span id="keepFramesLabel">Save every analysed frame to the device</span>
       </label>
@@ -194,26 +198,27 @@ const I18N = {
     no_location_help: "A pothole was confirmed, but without a GPS fix the app cannot tell which corporation is responsible, so it will not address a complaint. The photo is saved: reopen it once location is available.",
     review_btn: "Review and label frames", export_btn: "Export labelled dataset",
     dash_btn: "&#128506;&#65039; &nbsp;Your contribution", dash_title: "Your contribution",
-    dash_range: "{days} of reporting &middot; first on {first}",
+    dash_range: "{days} of reporting · first on {first}",
     dash_empty: "No potholes reported yet. Your map fills up as you drive.",
     day_one: "1 day", day_many: "{n} days",
     stat_found: "potholes found", stat_reported: "complaints sent", stat_frames: "frames checked",
     stat_drives: "drives", stat_footage: "MB of footage", stat_km: "km of road covered",
     by_size: "By size", by_area: "By corporation", map_pins: "{n} pinned",
     map_offline: "Map tiles need a connection. Points are still plotted below.",
-    zoom_hint: "Pinch to zoom &middot; drag to pan &middot; double tap to reset",
-    rec_suffix: "&middot; recording {mb} MB", rec_failed: "&middot; not recording",
+    zoom_hint: "Pinch to zoom · drag to pan · double tap to reset",
+    rec_suffix: "· recording {mb} MB", rec_failed: "· not recording",
     net_trouble: "Connection trouble, still scanning ({n} frames waiting)",
     camera_lost: "Camera paused (another app may be using it). Scanning resumes automatically.",
     drive_end_failed: "{n} frames could not be checked because of the connection.",
-    footage_line: "Footage: {mb} MB &middot; {segments} clips",
+    footage_line: "Footage: {mb} MB · {segments} clips",
     analyse_btn: "Analyse footage", delete_footage: "Delete footage",
-    analysing: "Frame {i} of {n} &middot; {found} new",
+    analysing: "Frame {i} of {n} · {found} new",
     analyse_done: "Footage analysed: {found} new potholes from {n} frames.",
     analyse_none: "No footage stored for this drive.",
-    analysing_failed: "&middot; {n} failed",
+    analysing_failed: "· {n} failed",
     analyse_incomplete: "Could not finish: {failed} of {n} frames were not checked ({err}) So no result is being claimed, and the video has been kept.",
     debug_note: "On: the video survives analysis, so a drive can be re-examined or re-run against a better model. Off: the video is deleted once its potholes have been extracted.",
+    record_label: "Record video during a drive",
     keep_frames_label: "Save every analysed frame to the device",
     keep_frames_note: "Writes each frame the AI checked, with its verdict, into Documents/pothole-frames on this phone. Visible in the Files app, and the raw material for building an evaluation set. Adds up fast: roughly 300 KB a frame.",
     frames_saved: "{n} frames written to Documents/{dir}.",
@@ -222,11 +227,11 @@ const I18N = {
     footage_kept: "Video kept (debug mode).",
     offer_analyse: "Analyse this drive's video now? {clips} clips, {mb} MB. Potholes are kept as photos; the rest is discarded.",
     confirm_delete_footage: "Delete the recorded video for this drive? The reports stay.",
-    drive_group: "{date} &middot; {found} &middot; {checked} frames checked",
-    drive_group_partial: "{date} &middot; {found} &middot; {kept} kept",
+    drive_group: "{date} · {found} · {checked} frames checked",
+    drive_group_partial: "{date} · {found} · {kept} kept",
     lbl_yes: "Pothole", lbl_no: "Not a pothole", lbl_skip: "Skip", lbl_done: "Done",
     review_empty: "Nothing left to label. Drive with debug mode on to collect frames.",
-    review_progress: "{n} left to label &middot; {done} labelled so far",
+    review_progress: "{n} left to label · {done} labelled so far",
     model_said: "The app said: {verdict} ({pct}%)",
     export_ready: "{n} labelled frames, {mb} MB. Choose where to send it.",
     outside_coverage: "This location is outside the area this app covers.",
@@ -282,26 +287,27 @@ const I18N = {
     no_location_help: "ಗುಂಡಿ ದೃಢಪಟ್ಟಿದೆ, ಆದರೆ GPS ಇಲ್ಲದೆ ಯಾವ ಪಾಲಿಕೆ ಜವಾಬ್ದಾರಿ ಎಂದು ತಿಳಿಯದು, ಆದ್ದರಿಂದ ದೂರು ಸಿದ್ಧಪಡಿಸಿಲ್ಲ. ಫೋಟೋ ಉಳಿಸಲಾಗಿದೆ.",
     review_btn: "ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಗುರುತಿಸಿ", export_btn: "ಗುರುತಿಸಿದ ಡೇಟಾಸೆಟ್ ರಫ್ತು ಮಾಡಿ",
     dash_btn: "&#128506;&#65039; &nbsp;ನಿಮ್ಮ ಕೊಡುಗೆ", dash_title: "ನಿಮ್ಮ ಕೊಡುಗೆ",
-    dash_range: "{days} ವರದಿ &middot; ಮೊದಲನೆಯದು {first}",
+    dash_range: "{days} ವರದಿ · ಮೊದಲನೆಯದು {first}",
     dash_empty: "ಇನ್ನೂ ಗುಂಡಿಗಳ ವರದಿ ಇಲ್ಲ. ಡ್ರೈವ್ ಮಾಡಿದಂತೆ ನಕ್ಷೆ ತುಂಬುತ್ತದೆ.",
     day_one: "1 ದಿನ", day_many: "{n} ದಿನಗಳು",
     stat_found: "ಗುಂಡಿಗಳು ಪತ್ತೆ", stat_reported: "ದೂರುಗಳು ಕಳುಹಿಸಲಾಗಿದೆ", stat_frames: "ಫ್ರೇಮ್ ಪರಿಶೀಲನೆ",
     stat_drives: "ಡ್ರೈವ್‌ಗಳು", stat_footage: "MB ವಿಡಿಯೋ", stat_km: "ಕಿಮೀ ರಸ್ತೆ",
     by_size: "ಗಾತ್ರದ ಪ್ರಕಾರ", by_area: "ಪಾಲಿಕೆ ಪ್ರಕಾರ", map_pins: "{n} ಗುರುತಿಸಲಾಗಿದೆ",
     map_offline: "ನಕ್ಷೆಗೆ ಇಂಟರ್ನೆಟ್ ಬೇಕು. ಬಿಂದುಗಳು ಕೆಳಗೆ ತೋರಿಸಲಾಗಿದೆ.",
-    zoom_hint: "ಜೂಮ್‌ಗೆ ಪಿಂಚ್ &middot; ಸರಿಸಲು ಎಳೆಯಿರಿ &middot; ಮರುಹೊಂದಿಸಲು ಡಬಲ್ ಟ್ಯಾಪ್",
-    rec_suffix: "&middot; {mb} MB ರೆಕಾರ್ಡ್", rec_failed: "&middot; ರೆಕಾರ್ಡ್ ಆಗುತ್ತಿಲ್ಲ",
+    zoom_hint: "ಜೂಮ್‌ಗೆ ಪಿಂಚ್ · ಸರಿಸಲು ಎಳೆಯಿರಿ · ಮರುಹೊಂದಿಸಲು ಡಬಲ್ ಟ್ಯಾಪ್",
+    rec_suffix: "· {mb} MB ರೆಕಾರ್ಡ್", rec_failed: "· ರೆಕಾರ್ಡ್ ಆಗುತ್ತಿಲ್ಲ",
     net_trouble: "ಸಂಪರ್ಕ ಸಮಸ್ಯೆ, ಇನ್ನೂ ಸ್ಕ್ಯಾನ್ ಆಗುತ್ತಿದೆ ({n} ಬಾಕಿ)",
     camera_lost: "ಕ್ಯಾಮೆರಾ ವಿರಾಮದಲ್ಲಿದೆ (ಬೇರೆ ಆ್ಯಪ್ ಬಳಸುತ್ತಿರಬಹುದು). ತಾನಾಗಿಯೇ ಮುಂದುವರಿಯುತ್ತದೆ.",
     drive_end_failed: "ಸಂಪರ್ಕದ ಕಾರಣ {n} ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಲಾಗಲಿಲ್ಲ.",
-    footage_line: "ವಿಡಿಯೋ: {mb} MB &middot; {segments} ತುಣುಕುಗಳು",
+    footage_line: "ವಿಡಿಯೋ: {mb} MB · {segments} ತುಣುಕುಗಳು",
     analyse_btn: "ವಿಡಿಯೋ ವಿಶ್ಲೇಷಿಸಿ", delete_footage: "ವಿಡಿಯೋ ಅಳಿಸಿ",
-    analysing: "ಫ್ರೇಮ್ {i}/{n} &middot; {found} ಹೊಸ",
+    analysing: "ಫ್ರೇಮ್ {i}/{n} · {found} ಹೊಸ",
     analyse_done: "ವಿಶ್ಲೇಷಣೆ ಮುಗಿಯಿತು: {n} ಫ್ರೇಮ್‌ಗಳಿಂದ {found} ಹೊಸ ಗುಂಡಿಗಳು.",
     analyse_none: "ಈ ಡ್ರೈವ್‌ಗೆ ವಿಡಿಯೋ ಇಲ್ಲ.",
-    analysing_failed: "&middot; {n} ವಿಫಲ",
+    analysing_failed: "· {n} ವಿಫಲ",
     analyse_incomplete: "ಪೂರ್ಣಗೊಳಿಸಲಾಗಲಿಲ್ಲ: {n} ರಲ್ಲಿ {failed} ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಲಾಗಿಲ್ಲ ({err}) ಆದ್ದರಿಂದ ಯಾವುದೇ ಫಲಿತಾಂಶ ಹೇಳುತ್ತಿಲ್ಲ, ವಿಡಿಯೋ ಉಳಿಸಲಾಗಿದೆ.",
     debug_note: "ಆನ್: ವಿಶ್ಲೇಷಣೆಯ ನಂತರವೂ ವಿಡಿಯೋ ಉಳಿಯುತ್ತದೆ. ಆಫ್: ಗುಂಡಿಗಳನ್ನು ತೆಗೆದ ನಂತರ ವಿಡಿಯೋ ಅಳಿಸಲಾಗುತ್ತದೆ.",
+    record_label: "ಡ್ರೈವ್ ಸಮಯದಲ್ಲಿ ವಿಡಿಯೋ ರೆಕಾರ್ಡ್ ಮಾಡಿ",
     keep_frames_label: "ವಿಶ್ಲೇಷಿಸಿದ ಎಲ್ಲ ಫ್ರೇಮ್‌ಗಳನ್ನು ಸಾಧನದಲ್ಲಿ ಉಳಿಸಿ",
     keep_frames_note: "AI ಪರಿಶೀಲಿಸಿದ ಪ್ರತಿ ಫ್ರೇಮ್ ಮತ್ತು ಅದರ ತೀರ್ಮಾನವನ್ನು Documents/pothole-frames ನಲ್ಲಿ ಬರೆಯುತ್ತದೆ. ಫೈಲ್ಸ್ ಆ್ಯಪ್‌ನಲ್ಲಿ ಕಾಣುತ್ತದೆ. ಪ್ರತಿ ಫ್ರೇಮ್ ಸುಮಾರು 300 KB.",
     frames_saved: "{n} ಫ್ರೇಮ್‌ಗಳನ್ನು Documents/{dir} ನಲ್ಲಿ ಬರೆಯಲಾಗಿದೆ.",
@@ -310,11 +316,11 @@ const I18N = {
     footage_kept: "ವಿಡಿಯೋ ಉಳಿಸಲಾಗಿದೆ (ಡೀಬಗ್ ಮೋಡ್).",
     offer_analyse: "ಈ ಡ್ರೈವ್‌ನ ವಿಡಿಯೋ ಈಗ ವಿಶ್ಲೇಷಿಸಬೇಕೆ? {clips} ತುಣುಕುಗಳು, {mb} MB. ಗುಂಡಿಗಳು ಫೋಟೋಗಳಾಗಿ ಉಳಿಯುತ್ತವೆ, ಉಳಿದವು ಅಳಿಸಲಾಗುತ್ತದೆ.",
     confirm_delete_footage: "ಈ ಡ್ರೈವ್‌ನ ವಿಡಿಯೋ ಅಳಿಸಬೇಕೆ? ವರದಿಗಳು ಉಳಿಯುತ್ತವೆ.",
-    drive_group: "{date} &middot; {found} &middot; {checked} ಫ್ರೇಮ್ ಪರಿಶೀಲನೆ",
-    drive_group_partial: "{date} &middot; {found} &middot; {kept} ಉಳಿಸಲಾಗಿದೆ",
+    drive_group: "{date} · {found} · {checked} ಫ್ರೇಮ್ ಪರಿಶೀಲನೆ",
+    drive_group_partial: "{date} · {found} · {kept} ಉಳಿಸಲಾಗಿದೆ",
     lbl_yes: "ಗುಂಡಿ", lbl_no: "ಗುಂಡಿ ಅಲ್ಲ", lbl_skip: "ಬಿಟ್ಟುಬಿಡಿ", lbl_done: "ಮುಗಿಯಿತು",
     review_empty: "ಗುರುತಿಸಲು ಏನೂ ಉಳಿದಿಲ್ಲ. ಡೀಬಗ್ ಮೋಡ್ ಆನ್ ಮಾಡಿ ಡ್ರೈವ್ ಮಾಡಿ.",
-    review_progress: "{n} ಬಾಕಿ &middot; {done} ಗುರುತಿಸಲಾಗಿದೆ",
+    review_progress: "{n} ಬಾಕಿ · {done} ಗುರುತಿಸಲಾಗಿದೆ",
     model_said: "ಆ್ಯಪ್ ಹೇಳಿದ್ದು: {verdict} ({pct}%)",
     export_ready: "{n} ಗುರುತಿಸಿದ ಫ್ರೇಮ್‌ಗಳು, {mb} MB. ಎಲ್ಲಿಗೆ ಕಳುಹಿಸಬೇಕೆಂದು ಆಯ್ಕೆಮಾಡಿ.",
     outside_coverage: "ಈ ಸ್ಥಳ ಈ ಆ್ಯಪ್ ಒಳಗೊಂಡ ವ್ಯಾಪ್ತಿಯ ಹೊರಗಿದೆ.",
@@ -384,6 +390,7 @@ function applyLang() {
   $("nameLabel").textContent = t("name_label");
   $("debugLabel").textContent = t("debug_label");
   $("debugNote").innerHTML = t("debug_note");
+  $("recordLabel").textContent = t("record_label");
   $("keepFramesLabel").textContent = t("keep_frames_label");
   $("keepFramesNote").innerHTML = t("keep_frames_note");
   $("settingsNote").textContent = t("settings_note");
@@ -426,7 +433,7 @@ async function loadReports() {
       <img class="thumb" src="${r.photo_url}" alt="">
       <div style="min-width:0">
         <div>${chip(r.status)} ${r.size ? `<span class="chip" style="background:#26272c;color:#cfcfd4">${tSize(r.size)}</span>` : ""}</div>
-        <div class="meta">${fmtDate(r.created_at)}${r.address ? " &middot; " + r.address.split(",").slice(0, 2).join(", ") : ""}</div>
+        <div class="meta">${fmtDate(r.created_at)}${r.address ? " · " + r.address.split(",").slice(0, 2).join(", ") : ""}</div>
       </div>
     </div>`;
   const [drives, footage] = await Promise.all([
@@ -1315,7 +1322,7 @@ function scatter(host, pins) {
       ${pins.map((p) => `<circle cx="${x(p.lng).toFixed(1)}" cy="${y(p.lat).toFixed(1)}" r="5"
          fill="#ff7a1a" fill-opacity="0.8" stroke="#ff7a1a"></circle>`).join("")}
     </svg>`;
-  $("mapNote").innerHTML = t("map_pins", { n: pins.length }) + " &middot; " + t("map_offline");
+  $("mapNote").innerHTML = t("map_pins", { n: pins.length }) + " · " + t("map_offline");
 }
 
 $("dashBtn").onclick = openDash;
@@ -1397,6 +1404,7 @@ window.openSettings = (firstRun) => {
   $("setName").value = localStorage.getItem("sender_name") || "";
   $("setDebug").checked = localStorage.getItem("debug_mode") === "1";
   $("setKeepFrames").checked = localStorage.getItem("keep_frames") === "1";
+  $("setRecord").checked = localStorage.getItem("record_video") !== "0";   // on unless turned off
   $("setLang").value = LANG;
   $("settingsHint").textContent = firstRun ? t("welcome_hint") : "";
   show("settings");
@@ -1408,6 +1416,7 @@ $("setSave").onclick = async () => {
   localStorage.setItem("sender_name", $("setName").value.trim());
   localStorage.setItem("debug_mode", $("setDebug").checked ? "1" : "0");
   localStorage.setItem("keep_frames", $("setKeepFrames").checked ? "1" : "0");
+  localStorage.setItem("record_video", $("setRecord").checked ? "1" : "0");
   const newLang = $("setLang").value;
   localStorage.setItem("app_lang", newLang);
   if (newLang !== LANG) { location.reload(); return; }
