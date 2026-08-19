@@ -881,7 +881,14 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
       const rec = await getReport(m[1]);
       if (!rec) throw new Error("Report not found.");
       if (rec.status === "unrouted") {
-        throw new Error("This pothole is outside the area this app covers, so there is no authority to address.");
+        // Say which of the four reasons it was. "Outside the area" is wrong and
+        // confusing when the real problem is that the phone never got a GPS fix.
+        throw new Error({
+          no_location: "This report has no location, so there is no way to tell which office is responsible. Retake it with location switched on.",
+          rural_road: "This road is outside every town boundary, so it belongs to the state PWD or a panchayat rather than a city body. The app will not guess an office.",
+          no_address: "This town's body is known, but no official email address for it has been published, so there is no verified recipient to address.",
+          outside_area: "This pothole is outside Karnataka, which is the area this app covers, so there is no authority to address.",
+        }[rec.unrouted_reason] || "This report could not be routed to a responsible office, so there is nothing to send.");
       }
       // "queued" stays reopenable: canceling the Gmail composer must not strand the report.
       if (rec.status !== "draft" && rec.status !== "queued") throw new Error("This report is not a sendable draft.");
