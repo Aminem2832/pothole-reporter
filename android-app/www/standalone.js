@@ -51,6 +51,9 @@
   // The rule that has not changed: a body we hold no verified address for is not routed.
   // Refusing is correct; addressing a citizen's complaint to a guess is not.
   const KGIS_TOWN_URL = "https://kgis.ksrsac.in/kgismaps/rest/services/Boundaries/Admin_Dynamic_New/MapServer/1/query";
+  // State basemap layer 289, the national highway network, from the same KSRSAC service
+  // the boundaries come from.
+  const KGIS_NH_URL = "https://kgis.ksrsac.in/kgismaps/rest/services/State_Basemap/State_Basemap_Dynamic/MapServer/289/query";
   const KGIS_GP_URL = "https://kgis.ksrsac.in/kgismaps/rest/services/Boundaries/GP_Boundary/MapServer/0/query";
   const OFFICER_TITLES = { CC: "Commissioner", CMC: "Chief Officer", TMC: "Chief Officer",
                            TP: "Chief Officer", NAC: "Chief Officer" };
@@ -321,9 +324,30 @@ Decide whether the photo clearly shows a pothole on a road surface.
   // to PWD or the panchayat engineering department. Neither means the point is outside
   // Karnataka altogether. An empty features array is a normal 200, not an error.
   async function kgisJurisdiction(lat, lng) {
-    const town = await fetchWithTimeout(kgisPoint(KGIS_TOWN_URL, lat, lng,
-      "KGISTownName,Town_Type,KGISTownCode,LGD_TownCode"), {}, 10000);
+    // Which polygon contains this point answers WHERE the pothole is, not WHO owns the
+    // road. A national highway is a line that crosses town boundaries, so containment
+    // alone addressed a Commissioner for NHAI's carriageway: measured, 5 of 12 verified
+    // NH points in Karnataka routed to a municipal officer. The state's own basemap has
+    // the highway network, on the host this already calls, so the two questions are asked
+    // together and the answer costs no extra wait.
+    const [town, nh] = await Promise.all([
+      fetchWithTimeout(kgisPoint(KGIS_TOWN_URL, lat, lng,
+        "KGISTownName,Town_Type,KGISTownCode,LGD_TownCode"), {}, 10000),
+      // Exact containment only. A buffer picks up OBJECTID 3059, Bengaluru's MG Road,
+      // which this land-cover layer misclassifies as National Highway, and that would
+      // start refusing genuine city reports in the densest coverage area.
+      fetchWithTimeout(kgisPoint(KGIS_NH_URL, lat, lng, "Name"), {}, 10000)
+        .catch(() => null),
+    ]);
     if (!town.ok) throw new Error("jurisdiction lookup unavailable");
+    // Fail closed. Treating an unanswered highway check as "not a highway" and going on
+    // to name a Chief Officer is exactly the bug this gate exists to stop.
+    if (!nh || !nh.ok) throw new Error("jurisdiction lookup unavailable");
+    const h = (await nh.json()).features || [];
+    if (h.length) {
+      const road = ((h[0].attributes || {}).Name || "").trim();
+      return { kind: "national_highway", name: road || null };
+    }
     const t = (await town.json()).features || [];
     if (t.length) {
       const a = t[0].attributes || {};
@@ -380,6 +404,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
     catch (e) { return offline(); }               // GIS down: fall back, do not fail
 
     if (where.kind === "outside_state") return [null, null, "outside_area"];
+    if (where.kind === "national_highway") return [null, null, "national_highway", where.name];
     if (where.kind === "rural") return [null, null, "rural_road", where.name];
 
     const entry = where.lgd && registry[where.lgd];
@@ -964,6 +989,7 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
         // confusing when the real problem is that the phone never got a GPS fix.
         throw new Error({
           no_location: "This report has no location, so there is no way to tell which office is responsible. Retake it with location switched on.",
+          national_highway: "This stretch is a national highway. It is maintained by NHAI or the state PWD National Highways division, not by the city or town body, so there is no municipal officer to address.",
           rural_road: "This road is outside every town boundary, so it belongs to the state PWD or a panchayat rather than a city body. The app will not guess an office.",
           no_address: "This town's body is known, but no official email address for it has been published, so there is no verified recipient to address.",
           outside_area: "This pothole is outside Karnataka, which is the area this app covers, so there is no authority to address.",

@@ -92,6 +92,11 @@ for a municipal council or town panchayat. All 18 corporations are covered, incl
 the five Greater Bengaluru Authority ones that replaced BBMP in 2025, along with 164
 councils and panchayats: 182 of the state's 319 bodies.
 
+National highways are refused. They are maintained by NHAI or the state PWD National
+Highways division, not by the town they pass through, so the app checks the state's
+highway network before naming anyone: roughly 1,450 km of national highway runs inside
+Karnataka's town boundaries, and every metre of it used to be addressed to a Commissioner.
+
 Where the GIS finds no town, the road belongs to the state PWD or a panchayat and the
 app says which panchayat rather than guessing an office. Outside Karnataka, and for
 any body whose official address is not yet in the directory, it refuses to name a

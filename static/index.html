@@ -195,6 +195,8 @@ const I18N = {
     chip_draft: "Draft", chip_sent: "Sent", chip_queued: "Opened in email", chip_rejected: "Not a pothole",
     chip_unrouted: "Outside coverage",
     no_location: "The location could not be determined.",
+    nat_highway: "{road} is a national highway",
+    nat_highway_help: "National highways are maintained by NHAI or the state PWD National Highways division, not by the city or town body, so there is no municipal officer to address. Report it on the NHAI Rajmargyatra app or the 1033 helpline.",
     rural_road: "This road is in {body} gram panchayat, not a town or city.",
     rural_road_help: "The pothole was confirmed, but it sits outside every urban local body, so it belongs to the state PWD or the panchayat engineering department rather than a municipality. Those are not in the directory yet, so no complaint has been addressed. The photo and location are saved.",
     no_address: "No published address for {body}.",
@@ -288,6 +290,8 @@ const I18N = {
     chip_draft: "ಡ್ರಾಫ್ಟ್", chip_sent: "ಕಳುಹಿಸಲಾಗಿದೆ", chip_queued: "ಇಮೇಲ್‌ನಲ್ಲಿ ತೆರೆಯಲಾಗಿದೆ", chip_rejected: "ಗುಂಡಿ ಅಲ್ಲ",
     chip_unrouted: "ವ್ಯಾಪ್ತಿಯ ಹೊರಗೆ",
     no_location: "ಸ್ಥಳ ಪತ್ತೆಯಾಗಲಿಲ್ಲ.",
+    nat_highway: "{road} ಒಂದು ರಾಷ್ಟ್ರೀಯ ಹೆದ್ದಾರಿ",
+    nat_highway_help: "ರಾಷ್ಟ್ರೀಯ ಹೆದ್ದಾರಿಗಳನ್ನು NHAI ಅಥವಾ ರಾಜ್ಯ ಲೋಕೋಪಯೋಗಿ ಇಲಾಖೆಯ ರಾಷ್ಟ್ರೀಯ ಹೆದ್ದಾರಿ ವಿಭಾಗ ನಿರ್ವಹಿಸುತ್ತದೆ, ನಗರ ಸಂಸ್ಥೆ ಅಲ್ಲ. ಆದ್ದರಿಂದ ಇಲ್ಲಿ ಪುರಸಭೆ ಅಧಿಕಾರಿಗೆ ದೂರು ಸಲ್ಲಿಸಲಾಗದು. NHAI ರಾಜಮಾರ್ಗಯಾತ್ರಾ ಆ್ಯಪ್ ಅಥವಾ 1033 ಸಹಾಯವಾಣಿಯಲ್ಲಿ ವರದಿ ಮಾಡಿ.",
     rural_road: "ಈ ರಸ್ತೆ {body} ಗ್ರಾಮ ಪಂಚಾಯತ್‌ನಲ್ಲಿದೆ, ಪಟ್ಟಣ ಅಥವಾ ನಗರದಲ್ಲಿ ಅಲ್ಲ.",
     rural_road_help: "ಗುಂಡಿ ದೃಢಪಟ್ಟಿದೆ, ಆದರೆ ಇದು ಯಾವುದೇ ನಗರ ಸ್ಥಳೀಯ ಸಂಸ್ಥೆಯ ಹೊರಗಿದೆ. ಇದು ಲೋಕೋಪಯೋಗಿ ಇಲಾಖೆ ಅಥವಾ ಪಂಚಾಯತ್ ಎಂಜಿನಿಯರಿಂಗ್ ಇಲಾಖೆಗೆ ಸೇರಿದೆ, ಅವು ಇನ್ನೂ ಪಟ್ಟಿಯಲ್ಲಿಲ್ಲ. ಫೋಟೋ ಉಳಿಸಲಾಗಿದೆ.",
     no_address: "{body} ಗೆ ಪ್ರಕಟಿತ ವಿಳಾಸ ಇಲ್ಲ.",
@@ -578,12 +582,14 @@ function step(delta) {
 // city was "outside coverage", which was wrong and unhelpful.
 function unroutedTitle(r) {
   if (r.unrouted_reason === "no_location") return t("no_location");
+  if (r.unrouted_reason === "national_highway") return t("nat_highway", { road: r.unrouted_body || "" });
   if (r.unrouted_reason === "rural_road") return t("rural_road", { body: r.unrouted_body || "a" });
   if (r.unrouted_reason === "no_address_for_body") return t("no_address", { body: r.unrouted_body || "" });
   return t("outside_coverage");
 }
 function unroutedHelp(r) {
   if (r.unrouted_reason === "no_location") return t("no_location_help");
+  if (r.unrouted_reason === "national_highway") return t("nat_highway_help");
   if (r.unrouted_reason === "rural_road") return t("rural_road_help");
   if (r.unrouted_reason === "no_address_for_body") return t("no_address_help");
   return t("outside_coverage_help");
