@@ -60,71 +60,51 @@ Gaurav Sen
 That last paragraph is the point. A pothole on a road still under warranty should be
 repaired by the contractor at no further cost to the public.
 
-## Install
+## Use it
 
-Download `PotholeReporter.apk` from the
-[Releases page](https://github.com/coding-parrot/pothole-reporter/releases), sideload
-it, paste an OpenAI API key on first launch, allow camera and location. Two minutes.
-English and Kannada, switchable in Settings.
+1. **Install.** Download `PotholeReporter.apk` from the
+   [Releases page](https://github.com/coding-parrot/pothole-reporter/releases) and
+   sideload it. Paste an OpenAI API key on first launch, allow camera and location.
+2. **Drive.** Mount the phone facing the road and tap Drive Mode. It shoots every 8
+   metres and checks eight frames at once, so you just drive.
+3. **Or point and shoot.** Tap Report a pothole for a single one you have stopped at.
+4. **Read the draft, press send.** Each confirmed pothole becomes an email draft with
+   the photo, address, coordinates, officer and probable contract. The app never sends
+   anything itself.
+5. **Check your map.** Your contribution shows every pothole you have reported,
+   kilometres covered, and which drafts you sent.
 
-## What it does
-
-**Drive Mode.** Mount the phone facing the road. It captures every 8 metres, checks
-up to four frames at once with `gpt-5-mini`, and records the whole drive to video so
-nothing between frames is lost. Afterwards you can re-analyse that footage more
-densely, or against a better model later; a confirmed pothole keeps its photo and the
-video is deleted unless you asked to keep it.
-
-**Single shot.** Point, shoot, get a draft with the photo, address, coordinates, map
-link, the responsible officer and the probable contract.
-
-**Review, then send.** Every complaint is a draft you edit. The app never sends
-anything; it opens your email app with the full-resolution photo attached and stops.
-
-**Your contribution.** A dashboard totalling potholes found, complaints sent,
-kilometres covered, and a map of every one you have reported.
+Settings has English and Kannada, and a debug mode that keeps the drive video so you
+can re-analyse it later.
 
 ## Who receives them
 
-The app asks Karnataka's state GIS which local body contains the pothole, then
-addresses that body's head: a Commissioner for a city corporation, a Chief Officer
-for a municipal council or town panchayat. All 18 corporations are covered, including
-the five Greater Bengaluru Authority ones that replaced BBMP in 2025, along with 164
-councils and panchayats: 182 of the state's 319 bodies.
+The app asks Karnataka's state GIS which body owns the road, then addresses its head.
 
-National highways are refused. They are maintained by NHAI or the state PWD National
-Highways division, not by the town they pass through, so the app checks the state's
-highway network before naming anyone: roughly 1,450 km of national highway runs inside
-Karnataka's town boundaries, and every metre of it used to be addressed to a Commissioner.
+- **City corporation** goes to the Commissioner, **council or town panchayat** to the
+  Chief Officer. 182 of the state's 319 bodies, including all 18 corporations and the
+  five that replaced BBMP in 2025.
+- **National highways are refused.** NHAI or the PWD highways division maintains them,
+  not the town they cross. About 1,450 km of NH runs inside Karnataka's town boundaries.
+- **Rural roads are refused** and name the gram panchayat, rather than guessing an office.
+- **Outside Karnataka, or a body with no published address, is refused.** A complaint to
+  the wrong office is worse than no complaint.
 
-Where the GIS finds no town, the road belongs to the state PWD or a panchayat and the
-app says which panchayat rather than guessing an office. Outside Karnataka, and for
-any body whose official address is not yet in the directory, it refuses to name a
-recipient. A complaint to the wrong office is worse than no complaint.
-
-Email is a contact channel, not a tracked one. For a ticket number, also file on
-Sahaaya 2.0.
+Email is a contact channel, not a tracked one. For a ticket number, also file on Sahaaya 2.0.
 
 ## Contracts
 
-Every data source is documented, with commands to verify each one, in
-[docs/SOURCES.md](docs/SOURCES.md).
+The APK bundles 42,283 awarded road-work contracts from KPPP, Karnataka's procurement
+portal. When a match clears a confidence gate, the complaint names the tender.
 
-The APK bundles 42,283 awarded road-work contracts pulled from KPPP, Karnataka's
-procurement portal, covering the whole state. When a match clears a confidence gate the
-complaint names the tender, always as a probable match for the officer to verify.
+- **Only the officer's own works count.** A Commissioner cannot enforce a state PWD,
+  panchayat or irrigation contract, so those 23,311 rows are never named in their letter.
+- **1,124 contracts name a contractor.** The portal's search results omit the winning
+  bidder, so elsewhere the complaint says plainly that none is recorded.
+- **Warranty is inferred from the publication date**, since award records carry no defect
+  liability period. It is always stated as a possibility, never a fact.
 
-Only the addressed officer's own works are considered. A Commissioner or Chief Officer
-can enforce their body's contracts but has no standing over a state PWD, panchayat or
-irrigation contract, so those 23,311 rows are never named in their letter even when the
-road name matches well.
-
-The portal's search results do not carry the winning bidder, so only the 1,124 contracts
-from the Bengaluru snapshot name a contractor; elsewhere the complaint names the tender
-and says plainly that no bidder is recorded rather than inventing one. Award records
-carry no defect liability period either, so warranty status is inferred from the
-publication date and stated as a possibility, never a fact.
-
+Every source is documented with commands to verify it in [docs/SOURCES.md](docs/SOURCES.md).
 Refresh with `python3 tools/pull-kppp.py`.
 
 ## Cost
