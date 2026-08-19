@@ -40,9 +40,33 @@
   };
   const HQ = ["Commissioner, Greater Bengaluru Authority (HQ)", "comm@bbmp.gov.in"];
 
-  // The officer directory and the bundled contracts are Bengaluru-only. Outside it
-  // there is no authority this app can name, and guessing sends a citizen's complaint
-  // to a body with no jurisdiction, so coverage is checked before anything is routed.
+  // Karnataka jurisdiction lookup.
+  //
+  // Which body owns a road is a question the state already answers: KGIS holds the
+  // boundary of every urban local body and returns the one containing a point, along
+  // with its class and its national LGD code. Keying the officer directory on that code
+  // rather than on a place name from a geocoder is what makes this work statewide: name
+  // matching guessed, a point-in-polygon lookup does not.
+  //
+  // The rule that has not changed: a body we hold no verified address for is not routed.
+  // Refusing is correct; addressing a citizen's complaint to a guess is not.
+  const KGIS_TOWN_URL = "https://kgis.ksrsac.in/kgismaps/rest/services/Boundaries/Admin_Dynamic_New/MapServer/1/query";
+  const KGIS_GP_URL = "https://kgis.ksrsac.in/kgismaps/rest/services/Boundaries/GP_Boundary/MapServer/0/query";
+  const OFFICER_TITLES = { CC: "Commissioner", CMC: "Chief Officer", TMC: "Chief Officer",
+                           TP: "Chief Officer", NAC: "Chief Officer" };
+
+  let _bodies = null;
+  async function bodies() {
+    if (_bodies) return _bodies;
+    try {
+      const res = await fetchWithTimeout("karnataka-bodies.json", {}, 8000);
+      _bodies = (await res.json()).bodies || {};
+    } catch (e) { _bodies = {}; }
+    return _bodies;
+  }
+
+  // Bengaluru is still resolvable without the network: the five corporations are the
+  // common case and a demo should not depend on a state GIS being reachable.
   const BLR = { minLat: 12.70, maxLat: 13.25, minLng: 77.25, maxLng: 77.90 };
   function inCoverage(lat, lng, address) {
     if (lat != null && lng != null && !Number.isNaN(lat) && !Number.isNaN(lng)) {
@@ -257,25 +281,101 @@ Decide whether the photo clearly shows a pothole on a road surface.
   }
 
   // ---------- location ----------
+  // The officer knows which state and country they work in. A complaint that says
+  // "..., Bengaluru Central City Corporation, Bengaluru, Bangalore North, Bengaluru
+  // Urban, Karnataka, 560052, India" reads like machine output, so the address is built
+  // from the parts that actually locate the pothole: street, locality, city, pincode.
+  // display_name is kept only for the offline routing fallback, which needs the
+  // corporation name that this trimming deliberately drops.
   async function reverseGeocode(lat, lng) {
     try {
-      const res = await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&zoom=17`, {}, 12000);
+      const res = await fetchWithTimeout(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&zoom=17&addressdetails=1`,
+        {}, 12000);
       if (!res.ok) return null;
-      return (await res.json()).display_name || null;
+      const d = await res.json();
+      const a = d.address || {};
+      const parts = [
+        a.road || a.pedestrian || a.residential || a.footway,
+        a.neighbourhood || a.hamlet,
+        a.suburb || a.village,
+        a.city || a.town || a.municipality,
+        a.postcode,
+      ].filter((x, i, all) => x && all.indexOf(x) === i);
+      return { short: parts.join(", ") || d.display_name || null, full: d.display_name || null };
     } catch (e) { return null; }
   }
 
-  // Returns [null, null] when the pothole is outside the covered area. HQ stays the
-  // fallback only *within* Bengaluru, where it genuinely has jurisdiction.
-  function routeOfficer(address, covered) {
-    if (!covered) return [null, null];
-    if (address) {
-      const low = address.toLowerCase();
-      for (const [needle, officer] of Object.entries(OFFICERS)) {
-        if (low.includes(needle)) return officer;
-      }
+  // Asks the state which body contains this point. Returns null when the point is
+  // outside every urban local body, which is the rural case: those roads belong to PWD
+  // or the panchayat engineering department, not to a municipality.
+  const kgisPoint = (base, lat, lng, fields) => {
+    const geometry = encodeURIComponent(JSON.stringify(
+      { x: lng, y: lat, spatialReference: { wkid: 4326 } }));
+    return `${base}?geometry=${geometry}&geometryType=esriGeometryPoint`
+      + `&spatialRel=esriSpatialRelIntersects&outFields=${fields}&returnGeometry=false&f=json`;
+  };
+
+  // Three outcomes, and telling them apart is the whole point. A town means a municipal
+  // body owns the road. No town but a gram panchayat means rural Karnataka, which belongs
+  // to PWD or the panchayat engineering department. Neither means the point is outside
+  // Karnataka altogether. An empty features array is a normal 200, not an error.
+  async function kgisJurisdiction(lat, lng) {
+    const town = await fetchWithTimeout(kgisPoint(KGIS_TOWN_URL, lat, lng,
+      "KGISTownName,Town_Type,KGISTownCode,LGD_TownCode"), {}, 10000);
+    if (!town.ok) throw new Error("jurisdiction lookup unavailable");
+    const t = (await town.json()).features || [];
+    if (t.length) {
+      const a = t[0].attributes || {};
+      return { kind: "town", name: a.KGISTownName || null,
+               type: (a.Town_Type || "").trim().toUpperCase(),
+               lgd: a.LGD_TownCode ? String(a.LGD_TownCode) : "" };
     }
-    return HQ;
+    // Electronics City is the one town row with a blank type and no codes, so it lands
+    // here as a named body with no LGD: still refused, but by name rather than silently.
+    const gp = await fetchWithTimeout(kgisPoint(KGIS_GP_URL, lat, lng, "KGISGPName"), {}, 10000);
+    if (gp.ok) {
+      const g = (await gp.json()).features || [];
+      const name = g.length && (g[0].attributes || {}).KGISGPName;
+      if (name && String(name).trim()) return { kind: "rural", name: String(name).trim() };
+    }
+    return { kind: "outside_state" };
+  }
+
+  // Resolves the officer to address, or [null, null] with a reason. Every path that
+  // cannot name a real body returns nothing rather than a plausible-looking guess.
+  async function routeOfficer(address, lat, lng) {
+    const registry = await bodies();
+
+    // Bengaluru without the network: the common case must not depend on the state GIS.
+    const offline = () => {
+      if (!inCoverage(lat, lng, address)) return [null, null, "outside_area"];
+      if (address) {
+        const low = address.toLowerCase();
+        for (const [code, b] of Object.entries(registry)) {
+          if (b.email && low.includes(b.name.toLowerCase())) {
+            return [`${b.officer}, ${b.name}${b.short ? ` (${b.short})` : ""}`, b.email, null];
+          }
+        }
+      }
+      return [HQ[0], HQ[1], null];
+    };
+
+    if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
+      return hasLocation(lat, lng, address) ? offline() : [null, null, "no_location"];
+    }
+
+    let where;
+    try { where = await kgisJurisdiction(lat, lng); }
+    catch (e) { return offline(); }               // GIS down: fall back, do not fail
+
+    if (where.kind === "outside_state") return [null, null, "outside_area"];
+    if (where.kind === "rural") return [null, null, "rural_road", where.name];
+
+    const entry = where.lgd && registry[where.lgd];
+    if (!entry || !entry.email) return [null, null, "no_address_for_body", where.name];
+    const title = entry.officer || OFFICER_TITLES[entry.type || where.type] || "Chief Officer";
+    return [`${title}, ${entry.name}${entry.short ? ` (${entry.short})` : ""}`, entry.email, null];
   }
 
   function distMeters(lat1, lng1, lat2, lng2) {
@@ -287,14 +387,17 @@ Decide whether the photo clearly shows a pothole on a road surface.
 
   // ---------- tenders ----------
   let _tenders = null;
+  // Parsed once per app session, which matters far more now the file is 9.5 MB: the
+  // bundled data cannot change while the app runs, so one parse is correct.
   async function tenders() {
     if (_tenders) return _tenders;
     try {
-      const res = await fetch("tenders.json");
-      _tenders = res.ok ? await res.json() : [];
+      const res = await fetchWithTimeout("tenders.json", {}, 20000);
+      _tenders = await res.json();
     } catch (e) { _tenders = []; }
     return _tenders;
   }
+
 
   const TENDER_STOP = new Set(["road", "roads", "street", "cross", "main", "layout", "bengaluru", "bangalore",
     "karnataka", "india", "ward", "city", "corporation", "south", "north", "east",
@@ -309,8 +412,17 @@ Decide whether the photo clearly shows a pothole on a road surface.
       }
     }
     if (!tokens.size) return null;
+    // A complaint only ever reaches a municipal officer: rural and out-of-state reports
+    // refuse to route, so the addressee is always a Commissioner or Chief Officer. They
+    // can enforce their own body's works (DMA contracts, plus legacy BBMP ones in
+    // Bengaluru) but hold no standing over a state PWD, RDPR panchayat or irrigation
+    // contract. Naming one of those in their letter points them at work that is not
+    // theirs to act on, so those contracts are not candidates at all. Widen this list
+    // when the app learns to address PWD and panchayat engineers directly.
     const scored = [];
     for (const t of await tenders()) {
+      const agency = (t.tn || "").split("/")[0].toUpperCase();
+      if (agency !== "DMA" && agency !== "BBMP") continue;
       const hay = (t.t + " " + t.loc).toLowerCase();
       let score = 0;
       for (const tok of tokens) if (hay.includes(tok)) score++;
@@ -320,18 +432,19 @@ Decide whether the photo clearly shows a pothole on a road surface.
     const candidates = scored.slice(0, 25).map((x) => x[1]);
     if (!candidates.length) return null;
     const listing = candidates.map((t, i) =>
-      `${i}: ${t.t.slice(0, 150)} | ${t.loc} | contractor: ${t.c || "not named"} | awarded: ${t.d}`).join("\n");
-    const prompt = `You match a pothole's location to Bengaluru road-work contracts.
+      `${i}: ${t.t.slice(0, 150)} | ${t.loc} | contractor: ${t.c || "not named"} | published: ${t.d}`).join("\n");
+    const prompt = `You match a pothole's location to Karnataka municipal road-work contracts.
 The pothole's reverse-geocoded address is:
 ${address}
 
-Candidate contracts (index: work description | division | contractor | awarded):
+Candidate contracts (index: work description | division | contractor | published):
 ${listing}
 
 Pick the single contract whose work description covers this exact road stretch or
-its immediate locality (same layout, ward or named road). Road names repeat across
-Bengaluru localities, so the locality and ward context must agree, not just the
-road name. A ward-wide maintenance or pothole-filling contract for the pothole's
+its immediate locality (same layout, ward or named road). Road and locality names
+repeat across Karnataka, and these candidates are drawn from the whole state, so the
+town and ward context must agree, not just the road name. A contract in a different
+town is wrong however well the road name matches. A ward-wide maintenance or pothole-filling contract for the pothole's
 own layout or ward is a valid match. If no candidate clearly covers this location,
 match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     let m;
@@ -347,13 +460,13 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     } catch (e) { return null; }
     if (!m || m.match_index === null || m.match_index < 0 || m.match_index >= candidates.length || m.confidence < 0.6) return null;
     const t = candidates[m.match_index];
-    let warranty = "on record for this stretch";
+    let warranty = "recorded for this stretch";
     let warranty_code = "record";
     const dm = /^(\d{2})-(\d{2})-(\d{4})/.exec(t.d);
     if (dm) {
       const ageYears = (Date.now() - new Date(`${dm[3]}-${dm[2]}-${dm[1]}`).getTime()) / (365.25 * 24 * 3600 * 1000);
-      if (ageYears <= 1) { warranty = "likely still within the defect liability period"; warranty_code = "dlp"; }
-      else if (ageYears <= 3) { warranty = "possibly still within the maintenance period"; warranty_code = "maint"; }
+      if (ageYears <= 1) { warranty = "within the defect liability period"; warranty_code = "dlp"; }
+      else if (ageYears <= 3) { warranty = "within the maintenance period"; warranty_code = "maint"; }
     }
     // Records without a winner are common in this dataset. Naming nobody is correct;
     // a placeholder sentence read as a person's name in the Kannada draft.
@@ -372,59 +485,61 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     const sizeName = (s) => (kn ? ({ small: "ಸಣ್ಣ", medium: "ಮಧ್ಯಮ", large: "ದೊಡ್ಡ" })[s] || s : s);
     const size = a.size ? sizeName(a.size) : (kn ? "ಗಾತ್ರ ನಿರ್ಧರಿಸದ" : "unclassified");
     const road = address ? address.split(",")[0].trim() : null;
+
     let locLines;
     if (lat != null) {
       const la = lat.toFixed(6), ln = lng.toFixed(6);
       locLines = kn
         ? `ಸ್ಥಳ: ${address || "ಕೆಳಗಿನ ನಿರ್ದೇಶಾಂಕ ನೋಡಿ"}\nನಿರ್ದೇಶಾಂಕಗಳು: ${la}, ${ln}\nನಕ್ಷೆ ಲಿಂಕ್: https://maps.google.com/?q=${la},${ln}`
-        : `Location: ${address || "location attached below"}\nCoordinates: ${la}, ${ln}\nMap link: https://maps.google.com/?q=${la},${ln}`;
+        : `Location: ${address || "see coordinates below"}\nCoordinates: ${la}, ${ln}\nMap link: https://maps.google.com/?q=${la},${ln}`;
     } else {
       locLines = kn
         ? "ಸ್ಥಳ: ಸ್ವಯಂಚಾಲಿತವಾಗಿ ನಿರ್ಧರಿಸಲಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಲಗತ್ತಿಸಿದ ಫೋಟೋ ನೋಡಿ."
         : "Location: could not be determined automatically. Please see the attached photo for landmarks.";
     }
+
     const subject = kn
       ? `ರಸ್ತೆ ಗುಂಡಿ ದೂರು: ${size} ಗುಂಡಿ` + (road ? ` (${road})` : "")
       : `Pothole complaint: ${size} pothole` + (road ? ` near ${road}` : "");
-    let body = kn
-      ? `ಮಾನ್ಯ ${officerName || "ಅಧಿಕಾರಿಗಳೇ"} ಅವರಿಗೆ,
 
-ತುರ್ತು ದುರಸ್ತಿ ಅಗತ್ಯವಿರುವ ರಸ್ತೆ ಗುಂಡಿಯ ಬಗ್ಗೆ ದೂರು ಸಲ್ಲಿಸುತ್ತಿದ್ದೇನೆ.
+    // The AI's own description of the photo used to be pasted in as a "Details:" line.
+    // The photo is attached and the officer can see it, so the sentence added length
+    // without adding information. Same reasoning for dropping the mention of filing on
+    // Sahaaya: an officer reading this does not need to be told about a parallel filing.
+    const paras = kn
+      ? [
+          `ಮಾನ್ಯ ${officerName || "ಅಧಿಕಾರಿಗಳೇ"} ಅವರಿಗೆ,`,
+          "ದುರಸ್ತಿ ಅಗತ್ಯವಿರುವ ರಸ್ತೆ ಗುಂಡಿಯ ಬಗ್ಗೆ ದೂರು ಸಲ್ಲಿಸುತ್ತಿದ್ದೇನೆ.",
+          `${locLines}\nಅಂದಾಜು ಗಾತ್ರ: ${size}`,
+          "ಫೋಟೋ ಲಗತ್ತಿಸಲಾಗಿದೆ. ಈ ಗುಂಡಿ ದ್ವಿಚಕ್ರ ವಾಹನ ಸವಾರರಿಗೆ ಮತ್ತು ಇತರ ರಸ್ತೆ ಬಳಕೆದಾರರಿಗೆ ಅಪಾಯಕಾರಿ. ಇದನ್ನು ಶೀಘ್ರ ಪರಿಶೀಲಿಸಿ ದುರಸ್ತಿ ಮಾಡಬೇಕೆಂದು, ಮತ್ತು ಈ ರಸ್ತೆ ಭಾಗ ನಿರ್ವಹಣಾ ವಾರಂಟಿ ಅಡಿಯಲ್ಲಿದ್ದರೆ ಜವಾಬ್ದಾರ ಗುತ್ತಿಗೆದಾರರಿಗೆ ವರ್ಗಾಯಿಸಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ.",
+        ]
+      : [
+          `Dear ${officerName || "Sir or Madam"},`,
+          "I would like to report a pothole that needs repair.",
+          `${locLines}\nApproximate size: ${size}`,
+          "PFA image. This pothole poses a danger to two wheeler riders and other road users. I request the city corporation to inspect and repair it at the earliest, and to route it to the contractor responsible if this road section is still under a maintenance warranty.",
+        ];
 
-${locLines}
-ಅಂದಾಜು ಗಾತ್ರ: ${size}
-ವಿವರ: ${a.description}
-
-ಗುಂಡಿಯ ಛಾಯಾಚಿತ್ರವನ್ನು ಈ ಇಮೇಲ್‌ಗೆ ಲಗತ್ತಿಸಲಾಗಿದೆ. ಈ ಗುಂಡಿ ದ್ವಿಚಕ್ರ ವಾಹನ ಸವಾರರಿಗೆ ಮತ್ತು ಇತರ ರಸ್ತೆ ಬಳಕೆದಾರರಿಗೆ ಅಪಾಯಕಾರಿ. ಇದನ್ನು ಶೀಘ್ರ ಪರಿಶೀಲಿಸಿ ದುರಸ್ತಿ ಮಾಡಬೇಕೆಂದು, ಮತ್ತು ಈ ರಸ್ತೆ ನಿರ್ವಹಣಾ ವಾರಂಟಿ ಅಡಿಯಲ್ಲಿದ್ದರೆ ಸಂಬಂಧಿತ ಗುತ್ತಿಗೆದಾರರಿಂದ ದುರಸ್ತಿ ಮಾಡಿಸಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ. ಈ ದೂರನ್ನು ಸಹಾಯ (Sahaaya) ವೇದಿಕೆಯಲ್ಲಿಯೂ ದಾಖಲಿಸುತ್ತೇನೆ.
-
-ನಗರ ಸೇವೆಗೆ ಧನ್ಯವಾದಗಳು.
-
-ವಂದನೆಗಳು,
-${S.name}`
-      : `Dear ${officerName || "Sir or Madam"},
-
-I would like to report a pothole that needs urgent repair.
-
-${locLines}
-Approximate size: ${size}
-Details: ${a.description}
-
-A photograph of the pothole is attached to this email. This pothole poses a danger to two wheeler riders and other road users. I request the city corporation to inspect and repair it at the earliest, and to route it to the contractor responsible if this road section is still under a maintenance warranty. I am also filing this grievance on Sahaaya so it can be tracked to resolution.
-
-Thank you for your service to the city.
-
-Regards,
-${S.name}`;
     if (tender) {
-      const warrantyKn = ({ dlp: "ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅವಧಿಯಲ್ಲಿ ಇನ್ನೂ ಇರುವ ಸಾಧ್ಯತೆ ಹೆಚ್ಚು", maint: "ನಿರ್ವಹಣಾ ಅವಧಿಯಲ್ಲಿ ಇನ್ನೂ ಇರುವ ಸಾಧ್ಯತೆ ಇದೆ", record: "ಈ ಭಾಗದ ದಾಖಲೆಯಲ್ಲಿದೆ" })[tender.warranty_code || "record"];
-      const para = kn
-        ? `ಸಾರ್ವಜನಿಕ ಖರೀದಿ ದಾಖಲೆಗಳ ಪ್ರಕಾರ ಈ ರಸ್ತೆ ಭಾಗ ಟೆಂಡರ್ ${tender.tender_number} ("${tender.title.slice(0, 140).trim()}") ಅಡಿಯಲ್ಲಿ ಬರುವ ಸಾಧ್ಯತೆ ಇದೆ. ಈ ಟೆಂಡರ್ ${tender.published} ರಂದು ಪ್ರಕಟವಾಗಿದೆ${tender.contractor ? `, ಮತ್ತು ದಾಖಲೆಯಲ್ಲಿ ಗೆದ್ದ ಬಿಡ್‌ದಾರರಾಗಿ ${tender.contractor} ಎಂದು ನಮೂದಿಸಲಾಗಿದೆ` : `, ಆದರೆ ಗೆದ್ದ ಬಿಡ್‌ದಾರರ ಹೆಸರು ದಾಖಲೆಯಲ್ಲಿ ಇಲ್ಲ`}. ಪ್ರಕಟಣೆಯ ದಿನಾಂಕದ ಆಧಾರದ ಮೇಲೆ ಮಾತ್ರ ಇದು ${warrantyKn} ಎಂಬ ಸಾಧ್ಯತೆ ಇದೆ. ಇವು ಖಚಿತ ಸಂಗತಿಗಳೆಂದು ನಾನು ಹೇಳುತ್ತಿಲ್ಲ: ಇವು ಸಾರ್ವಜನಿಕ ಟೆಂಡರ್ ದಾಖಲೆಗಳ ಪಠ್ಯ ಹೊಂದಾಣಿಕೆಯಿಂದ ಬಂದವು, ದಯವಿಟ್ಟು ಟೆಂಡರ್ ದಾಖಲೆಗಳೊಂದಿಗೆ ಪರಿಶೀಲಿಸಿ. ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅಥವಾ ನಿರ್ವಹಣಾ ಅವಧಿ ಜಾರಿಯಲ್ಲಿದ್ದರೆ, ಪಾಲಿಕೆಗೆ ಹೆಚ್ಚುವರಿ ವೆಚ್ಚವಿಲ್ಲದೆ ಜವಾಬ್ದಾರ ಗುತ್ತಿಗೆದಾರರಿಂದಲೇ ದುರಸ್ತಿ ಮಾಡಿಸಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ.`
-        : `Public procurement records indicate this road stretch may fall under tender ${tender.tender_number} ("${tender.title.slice(0, 140).trim()}"), published on ${tender.published}${tender.contractor ? `, with ${tender.contractor} recorded as the winning bidder` : ", with no winning bidder recorded"}. On the published date alone it may be ${tender.warranty}. I am not asserting these details as established fact: they come from a text match against public tender records and I request that the corporation verify them against the tender documents. If a defect liability or maintenance period is in force, I request that the repair be carried out by the responsible contractor at no additional cost to the corporation.`;
-      body = kn
-        ? body.replace("\n\nನಗರ ಸೇವೆಗೆ", `\n\n${para}\n\nನಗರ ಸೇವೆಗೆ`)
-        : body.replace("\n\nThank you", `\n\n${para}\n\nThank you`);
+      const warrantyKn = ({ dlp: "ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅವಧಿಯಲ್ಲಿ ಇನ್ನೂ ಇರುವ ಸಾಧ್ಯತೆ ಇದೆ",
+                            maint: "ನಿರ್ವಹಣಾ ಅವಧಿಯಲ್ಲಿ ಇನ್ನೂ ಇರುವ ಸಾಧ್ಯತೆ ಇದೆ",
+                            record: "ಈ ಭಾಗದ ದಾಖಲೆಯಲ್ಲಿದೆ" })[tender.warranty_code || "record"];
+      const title = tender.title.slice(0, 140).trim();
+      // Two paragraphs, not one: the first states what the records say, the second makes
+      // the request. Published, never "awarded": the bundled field is the publication
+      // date, and this letter names a real company to a government officer.
+      if (kn) {
+        paras.push(`ಸಾರ್ವಜನಿಕ ಖರೀದಿ ದಾಖಲೆಗಳ ಪ್ರಕಾರ ಈ ರಸ್ತೆ ಭಾಗ ಟೆಂಡರ್ ${tender.tender_number} ("${title}") ಅಡಿಯಲ್ಲಿ ಬರುವ ಸಾಧ್ಯತೆ ಇದೆ. ಇದು ${tender.published} ರಂದು ಪ್ರಕಟವಾಗಿದೆ${tender.contractor ? `, ಗೆದ್ದ ಬಿಡ್‌ದಾರರಾಗಿ ${tender.contractor} ಎಂದು ದಾಖಲಾಗಿದೆ` : ", ಗೆದ್ದ ಬಿಡ್‌ದಾರರ ಹೆಸರು ದಾಖಲೆಯಲ್ಲಿ ಇಲ್ಲ"}, ಮತ್ತು ${warrantyKn}.`);
+        paras.push("ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅಥವಾ ನಿರ್ವಹಣಾ ಅವಧಿ ಜಾರಿಯಲ್ಲಿದ್ದರೆ, ಪಾಲಿಕೆಗೆ ಹೆಚ್ಚುವರಿ ವೆಚ್ಚವಿಲ್ಲದೆ ಗುತ್ತಿಗೆದಾರರಿಂದಲೇ ದುರಸ್ತಿ ಮಾಡಿಸಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ. ಇದು ಸಂಭಾವ್ಯ ದಾಖಲೆ ಹೊಂದಾಣಿಕೆ; ದಯವಿಟ್ಟು ಟೆಂಡರ್ ದಾಖಲೆಗಳೊಂದಿಗೆ ಪರಿಶೀಲಿಸಿ.");
+      } else {
+        paras.push(`Public procurement records indicate this road stretch probably falls under tender ${tender.tender_number} ("${title}"), published on ${tender.published}${tender.contractor ? `, with ${tender.contractor} recorded as the winning bidder` : ", with no winning bidder recorded"}, and it may still be ${tender.warranty}.`);
+        paras.push("If the defect liability or maintenance period is in force, I request that the repair be carried out by the contractor at no additional cost to the corporation. This is a probable record match; kindly verify against the tender documents.");
+      }
     }
-    return [subject, body];
+
+    paras.push(kn ? "ನಗರ ಸೇವೆಗೆ ಧನ್ಯವಾದಗಳು." : "Thank you for your service to the city.");
+    paras.push(kn ? `ವಂದನೆಗಳು,\n${S.name}` : `Regards,\n${S.name}`);
+    return [subject, paras.join("\n\n")];
   }
 
   // ---------- storage (IndexedDB) ----------
@@ -525,6 +640,7 @@ ${S.name}`;
     const dataUrl = await toDataUrl(photo, driveMode ? 1024 : 2000, 0.85, true);
     // Geocoding runs in parallel with the AI calls; it never gates detection.
     const geoP = lat != null ? reverseGeocode(lat, lng).catch(() => null) : Promise.resolve(null);
+    const shortOf = (g) => (g && g.short) || null;
     progress(pmsg("detect"));
     // Single shot: contract adjudication runs speculatively alongside confirmation,
     // so the wait is the max of the two rather than their sum, and one watching user
@@ -535,7 +651,7 @@ ${S.name}`;
     // the wrong city, so it is not started at all.
     const coordCoverage = (lat != null && lng != null) ? inCoverage(lat, lng, null) : null;
     const tenderP = (driveMode || coordCoverage === false) ? null
-      : geoP.then((addr) => (inCoverage(lat, lng, addr) ? matchTender(addr) : null)).catch(() => null);
+      : geoP.then((g) => (inCoverage(lat, lng, shortOf(g)) ? matchTender(shortOf(g)) : null)).catch(() => null);
     const detectPrompt = DETECT_PROMPT + (LANG() === "kn"
       ? "\n- Write the description field in formal Kannada (ಕನ್ನಡ ಭಾಷೆಯಲ್ಲಿ ಬರೆಯಿರಿ)."
       : "");
@@ -547,9 +663,11 @@ ${S.name}`;
     if (driveMode && !accepted) return { found: false };
 
     if (accepted) progress(pmsg("finalize"));
-    const address = accepted ? await geoP : null;
-    const covered = accepted && (coordCoverage !== null ? coordCoverage : inCoverage(lat, lng, address));
-    const [officerName, officerEmail] = accepted ? routeOfficer(address, covered) : [null, null];
+    const geo = accepted ? await geoP : null;
+    const address = shortOf(geo);
+    const [officerName, officerEmail, unroutedReason, bodyName] = accepted
+      ? await routeOfficer((geo && geo.full) || address, lat, lng) : [null, null, null, null];
+    const covered = accepted && !!officerEmail;
     const tender = accepted && covered
       ? await (tenderP || matchTender(address).catch(() => null))
       : null;
@@ -571,8 +689,8 @@ ${S.name}`;
       status: accepted ? (covered ? "draft" : "unrouted") : "rejected",
       // Distinguishes "we know where this is and do not cover it" from "we never got a
       // fix", which are the same status but very different things to tell someone.
-      unrouted_reason: accepted && !covered
-        ? (hasLocation(lat, lng, address) ? "outside_area" : "no_location") : null,
+      unrouted_reason: accepted && !covered ? (unroutedReason || "outside_area") : null,
+      unrouted_body: accepted && !covered ? (bodyName || null) : null,
       officer_name: officerName, officer_email: officerEmail,
       tender_number: tender ? tender.tender_number : null,
       contractor: tender ? tender.contractor : null,
@@ -773,7 +891,14 @@ ${S.name}`;
       const rec = await getReport(m[1]);
       if (!rec) throw new Error("Report not found.");
       if (rec.status === "unrouted") {
-        throw new Error("This pothole is outside the area this app covers, so there is no authority to address.");
+        // Say which of the four reasons it was. "Outside the area" is wrong and
+        // confusing when the real problem is that the phone never got a GPS fix.
+        throw new Error({
+          no_location: "This report has no location, so there is no way to tell which office is responsible. Retake it with location switched on.",
+          rural_road: "This road is outside every town boundary, so it belongs to the state PWD or a panchayat rather than a city body. The app will not guess an office.",
+          no_address: "This town's body is known, but no official email address for it has been published, so there is no verified recipient to address.",
+          outside_area: "This pothole is outside Karnataka, which is the area this app covers, so there is no authority to address.",
+        }[rec.unrouted_reason] || "This report could not be routed to a responsible office, so there is nothing to send.");
       }
       // "queued" stays reopenable: canceling the Gmail composer must not strand the report.
       if (rec.status !== "draft" && rec.status !== "queued") throw new Error("This report is not a sendable draft.");
