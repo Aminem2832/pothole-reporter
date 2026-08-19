@@ -1,87 +1,89 @@
 #!/usr/bin/env python3
-"""Stamp each municipal contract with the LGD code of the body that owns it.
+"""Stamp each municipal contract with the LGD code of the body that awarded it.
 
-The app already knows which local body contains a pothole: the state GIS returns its
-LGD code. Without this field the matcher could not use that, and fell back to scoring
-every municipal contract in Karnataka by address tokens, which is both slow and how a
-contract from the wrong town gets shortlisted in the first place.
+The app already knows which local body contains a pothole: the state GIS returns its LGD
+code. Stamping the same code on each contract turns the shortlist into a lookup instead of
+a scan of every municipal contract in Karnataka.
 
-Every municipal row names its body in the location field ("DMA City Corporation
-Mysuru"), so the mapping is done once here rather than guessed at runtime.
+Resolution goes through the state's own roster of all 319 urban local bodies
+(data/karnataka-towns.json), NOT through the 182 bodies we hold an address for. Matching
+against the shorter list is what produced the Kanakapura bug: Kanakapura has no published
+address, so it was absent from the list and the nearest available name was Khanapura, a
+different town 500 km away in another district, and 45 of its contracts were stamped to it.
+Against the full roster, Kanakapura matches Kanakapura and simply ends up unstamped.
+
+A match must also beat the runner-up by a margin, so near-ties (Belur and Belluru,
+Chincholi and Chinchali) are left unstamped rather than guessed.
 """
-import json, re, difflib, sys, pathlib
+import json, re, difflib, pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 rows = json.load(open(ROOT / "data/tenders-karnataka.json"))
 rows = rows if isinstance(rows, list) else rows.get("tenders", [])
+towns = json.load(open(ROOT / "data/karnataka-towns.json"))["towns"]
 bodies = json.load(open(ROOT / "data/karnataka-bodies.json"))["bodies"]
 
-# Bengaluru's five corporations replaced BBMP in 2025 and inherited its works, which the
-# award records still file under BBMP zone names ("BBMP Bommanahalli Division"). Zone to
-# corporation is not published, so a legacy BBMP contract is offered to any Bengaluru
-# corporation rather than guessed at. Within Bengaluru that is the status quo.
 BLR = "BLR"
 BLR_CODES = {c for c, b in bodies.items()
              if any(w in b["name"].lower() for w in ("bengaluru", "bangalore"))}
 
-VARIANTS = [("dharawada","dharwad"),("hubballi","hubli"),("bengaluru","bangalore"),
-            ("mysuru","mysore"),("belagavi","belgaum"),("kalaburagi","gulbarga"),
-            ("ballari","bellary"),("vijayapura","bijapur"),("shivamogga","shimoga"),
-            ("tumakuru","tumkur"),("chikkamagaluru","chikmagalur"),
-            ("chamarajanagara","chamarajanagar"),("uu","u"),("oo","o"),("aa","a"),
-            ("ee","i"),("th","t"),("dh","d"),("bh","b"),("kh","k")]
+VAR = [("dharawada","dharwad"),("hubballi","hubli"),("bengaluru","bangalore"),
+       ("mysuru","mysore"),("belagavi","belgaum"),("kalaburagi","gulbarga"),
+       ("ballari","bellary"),("vijayapura","bijapur"),("shivamogga","shimoga"),
+       ("tumakuru","tumkur"),("uu","u"),("oo","o"),("aa","a"),("ee","i"),
+       ("th","t"),("dh","d"),("bh","b"),("kh","k"),("v","w"),("z","j")]
 STRIP = ["dma","bbmp","city corporation","city municipal council","town municipal council",
          "town panchayat","municipal corporation","nagara panchayat","corporation","council"]
+MIN_RATIO, MIN_MARGIN = 0.90, 0.03
 
 def norm(s):
-    s = (s or "").lower()
-    s = re.sub(r"[^a-z]", " ", s)
-    for a, b in VARIANTS: s = s.replace(a, b)
-    return re.sub(r"\s+", "", s)
+    s = re.sub(r"[^a-z]", "", (s or "").lower())
+    for a, b in VAR: s = s.replace(a, b)
+    return s.rstrip("u") or s          # a trailing -u is the commonest spelling difference
 
 def body_part(loc):
     low = (loc or "").lower()
     for p in STRIP: low = low.replace(p, " ")
-    return low.strip()
+    return " ".join(low.split())
 
-by_norm = {}
-for code, b in bodies.items():
-    by_norm.setdefault(norm(b["name"]), code)
-keys = list(by_norm)
+exact = {}
+for t in towns: exact.setdefault(norm(t["name"]), []).append(t)
+keys = list(exact)
 
-cache, stats = {}, {"mapped": 0, "blr": 0, "unmapped": 0}
+def resolve(loc):
+    """LGD code for this contract location, or None. Never guesses."""
+    n = norm(body_part(loc))
+    if n in exact:
+        c = exact[n]
+        return str(c[0]["lgd"]) if len(c) == 1 and c[0]["lgd"] else None
+    near = difflib.get_close_matches(n, keys, n=2, cutoff=MIN_RATIO)
+    if not near: return None
+    best = difflib.SequenceMatcher(None, n, near[0]).ratio()
+    if len(near) > 1:
+        second = difflib.SequenceMatcher(None, n, near[1]).ratio()
+        if best - second < MIN_MARGIN: return None      # too close to call
+    c = exact[near[0]]
+    return str(c[0]["lgd"]) if len(c) == 1 and c[0]["lgd"] else None
+
+cache, stats = {}, {"mapped":0, "blr":0, "no_address":0, "unresolved":0}
 for r in rows:
     agency = (r.get("tn") or "").split("/")[0].upper()
     if agency not in ("DMA", "BBMP"):
-        r.pop("b", None)
-        continue
+        r.pop("b", None); continue
     loc = (r.get("loc") or "").strip()
     if loc not in cache:
-        if agency == "BBMP":
-            cache[loc] = BLR
-        else:
-            n = norm(body_part(loc))
-            code = by_norm.get(n)
-            if not code:
-                m = difflib.get_close_matches(n, keys, n=1, cutoff=0.86)
-                code = by_norm[m[0]] if m else None
-            cache[loc] = code
+        cache[loc] = BLR if agency == "BBMP" else resolve(loc)
     code = cache[loc]
-    if code == BLR: stats["blr"] += 1; r["b"] = BLR
-    elif code:     stats["mapped"] += 1; r["b"] = code
-    else:          stats["unmapped"] += 1; r.pop("b", None)
+    if code == BLR:
+        stats["blr"] += 1; r["b"] = BLR
+    elif code and code in bodies and bodies[code].get("email"):
+        stats["mapped"] += 1; r["b"] = code
+    else:
+        stats["no_address" if code else "unresolved"] += 1; r.pop("b", None)
 
-out = ROOT / "data/tenders-karnataka.json"
-json.dump(rows, open(out, "w"), separators=(",", ":"))
+json.dump(rows, open(ROOT / "data/tenders-karnataka.json", "w"), separators=(",", ":"))
 json.dump(rows, open(ROOT / "android-app/www/tenders.json", "w"), separators=(",", ":"))
-
-print(f"stamped {stats['mapped']} rows with a body code")
-print(f"        {stats['blr']} legacy BBMP rows marked {BLR} (any Bengaluru corporation)")
-print(f"        {stats['unmapped']} municipal rows left unstamped (body has no published address)")
-idx = {}
-for r in rows:
-    if r.get("b"): idx.setdefault(r["b"], 0); idx[r["b"]] += 1
-print(f"\nindexed bodies: {len(idx)}")
-for code, n in sorted(idx.items(), key=lambda x: -x[1])[:8]:
-    name = "Bengaluru (5 corporations)" if code == BLR else bodies[code]["name"]
-    print(f"  {n:6}  {name}")
+print(f"stamped              {stats['mapped']}")
+print(f"legacy BBMP ({BLR})   {stats['blr']}")
+print(f"body has no address  {stats['no_address']}  (never citable, correctly unstamped)")
+print(f"unresolved location  {stats['unresolved']}")

@@ -1,0 +1,1920 @@
+{
+ "_comment": "Karnataka urban local bodies from KGIS (KSRSAC) layer Boundaries/Admin_Dynamic_New/MapServer/1. Keyed by LGD town code. Used to resolve KPPP contract locations to a body without guessing.",
+ "source": "https://kgis.ksrsac.in/kgismaps/rest/services/Boundaries/Admin_Dynamic_New/MapServer/1",
+ "towns": [
+  {
+   "name": "AINAPUR",
+   "type": "TP",
+   "lgd": 276618,
+   "district": "01"
+  },
+  {
+   "name": "ARABHAVI",
+   "type": "TP",
+   "lgd": 276577,
+   "district": "01"
+  },
+  {
+   "name": "ATHANI",
+   "type": "TMC",
+   "lgd": 251812,
+   "district": "01"
+  },
+  {
+   "name": "BAILAHONGAL",
+   "type": "CMC",
+   "lgd": 251827,
+   "district": "01"
+  },
+  {
+   "name": "BELAGAVI",
+   "type": "CC",
+   "lgd": 251824,
+   "district": "01"
+  },
+  {
+   "name": "CHIKKODI",
+   "type": "TMC",
+   "lgd": 251811,
+   "district": "01"
+  },
+  {
+   "name": "CHINCHALI",
+   "type": "TP",
+   "lgd": 276477,
+   "district": "01"
+  },
+  {
+   "name": "EXAMBA",
+   "type": "TP",
+   "lgd": 276575,
+   "district": "01"
+  },
+  {
+   "name": "GOKAK",
+   "type": "CMC",
+   "lgd": 251818,
+   "district": "01"
+  },
+  {
+   "name": "HARUGERI",
+   "type": "TMC",
+   "lgd": 276569,
+   "district": "01"
+  },
+  {
+   "name": "HUKKERI",
+   "type": "TMC",
+   "lgd": 251820,
+   "district": "01"
+  },
+  {
+   "name": "KABBUR",
+   "type": "TP",
+   "lgd": 276483,
+   "district": "01"
+  },
+  {
+   "name": "KANKANAWADI",
+   "type": "TP",
+   "lgd": 276567,
+   "district": "01"
+  },
+  {
+   "name": "KALLOLLI",
+   "type": "TP",
+   "lgd": 276576,
+   "district": "01"
+  },
+  {
+   "name": "KHANAPURA",
+   "type": "TP",
+   "lgd": 251825,
+   "district": "01"
+  },
+  {
+   "name": "CHENNAMMAN KITTUR",
+   "type": "TP",
+   "lgd": 276578,
+   "district": "01"
+  },
+  {
+   "name": "KONNUR",
+   "type": "TMC",
+   "lgd": 251816,
+   "district": "01"
+  },
+  {
+   "name": "GHATAPRABHA",
+   "type": "TMC",
+   "lgd": 276574,
+   "district": "01"
+  },
+  {
+   "name": "M.K.HUBBALLI",
+   "type": "TP",
+   "lgd": 299417,
+   "district": "01"
+  },
+  {
+   "name": "MUDALAGI",
+   "type": "TMC",
+   "lgd": 251815,
+   "district": "01"
+  },
+  {
+   "name": "MUGALKHOD",
+   "type": "TMC",
+   "lgd": 276563,
+   "district": "01"
+  },
+  {
+   "name": "MUNAVALLI",
+   "type": "TMC",
+   "lgd": 276564,
+   "district": "01"
+  },
+  {
+   "name": "NAGANUR",
+   "type": "TP",
+   "lgd": 301061,
+   "district": "01"
+  },
+  {
+   "name": "NIPPANI",
+   "type": "CMC",
+   "lgd": 251809,
+   "district": "01"
+  },
+  {
+   "name": "RAMDURGA",
+   "type": "TMC",
+   "lgd": 251829,
+   "district": "01"
+  },
+  {
+   "name": "SADALGA",
+   "type": "TMC",
+   "lgd": 251810,
+   "district": "01"
+  },
+  {
+   "name": "SANKESHWAR",
+   "type": "TMC",
+   "lgd": 251819,
+   "district": "01"
+  },
+  {
+   "name": "SAUNDATTI",
+   "type": "TMC",
+   "lgd": 251828,
+   "district": "01"
+  },
+  {
+   "name": "SHEDBAL",
+   "type": "TP",
+   "lgd": 276579,
+   "district": "01"
+  },
+  {
+   "name": "UGR KHURD",
+   "type": "TMC",
+   "lgd": 276565,
+   "district": "01"
+  },
+  {
+   "name": "RAIBAGH",
+   "type": "TP",
+   "lgd": 251814,
+   "district": "01"
+  },
+  {
+   "name": "AMINAGAD",
+   "type": "TP",
+   "lgd": 276597,
+   "district": "02"
+  },
+  {
+   "name": "BAGALKOTE",
+   "type": "CMC",
+   "lgd": 251839,
+   "district": "02"
+  },
+  {
+   "name": "BELAGALI",
+   "type": "TP",
+   "lgd": 276529,
+   "district": "02"
+  },
+  {
+   "name": "BILAGI",
+   "type": "TP",
+   "lgd": 251834,
+   "district": "02"
+  },
+  {
+   "name": "GULEDAGUDDA",
+   "type": "TMC",
+   "lgd": 251838,
+   "district": "02"
+  },
+  {
+   "name": "HUNAGUNDA",
+   "type": "TMC",
+   "lgd": 251840,
+   "district": "02"
+  },
+  {
+   "name": "ILKAL",
+   "type": "CMC",
+   "lgd": 251841,
+   "district": "02"
+  },
+  {
+   "name": "KAMATTAGI",
+   "type": "TP",
+   "lgd": 301079,
+   "district": "02"
+  },
+  {
+   "name": "KERUR",
+   "type": "TP",
+   "lgd": 251836,
+   "district": "02"
+  },
+  {
+   "name": "MAHALINGAPURA",
+   "type": "TMC",
+   "lgd": 251830,
+   "district": "02"
+  },
+  {
+   "name": "RABKAVI BANAHATTI",
+   "type": "CMC",
+   "lgd": 251833,
+   "district": "02"
+  },
+  {
+   "name": "TERDAL",
+   "type": "TMC",
+   "lgd": 251831,
+   "district": "02"
+  },
+  {
+   "name": "LOKAPUR",
+   "type": "TP",
+   "lgd": 299317,
+   "district": "02"
+  },
+  {
+   "name": "SHIRUR",
+   "type": "TP",
+   "lgd": 299179,
+   "district": "02"
+  },
+  {
+   "name": "ALMEL",
+   "type": "TP",
+   "lgd": 276540,
+   "district": "03"
+  },
+  {
+   "name": "BASAVANABAGEWADI",
+   "type": "TMC",
+   "lgd": 251845,
+   "district": "03"
+  },
+  {
+   "name": "CHADACHANA",
+   "type": "TP",
+   "lgd": 276559,
+   "district": "03"
+  },
+  {
+   "name": "DEVARAHIPPARAGI",
+   "type": "TP",
+   "lgd": 276558,
+   "district": "03"
+  },
+  {
+   "name": "INDI",
+   "type": "CMC",
+   "lgd": 251843,
+   "district": "03"
+  },
+  {
+   "name": "KOLHAR",
+   "type": "TP",
+   "lgd": 276543,
+   "district": "03"
+  },
+  {
+   "name": "MANAGULI",
+   "type": "TP",
+   "lgd": 276541,
+   "district": "03"
+  },
+  {
+   "name": "MUDDEBIHAL",
+   "type": "TMC",
+   "lgd": 251846,
+   "district": "03"
+  },
+  {
+   "name": "NALATAWAD",
+   "type": "TP",
+   "lgd": 276544,
+   "district": "03"
+  },
+  {
+   "name": "NIDGUNDI",
+   "type": "TP",
+   "lgd": 276557,
+   "district": "03"
+  },
+  {
+   "name": "SINDAGI",
+   "type": "TMC",
+   "lgd": 251844,
+   "district": "03"
+  },
+  {
+   "name": "TALIKOTE",
+   "type": "TMC",
+   "lgd": 251847,
+   "district": "03"
+  },
+  {
+   "name": "VIJAYAPURA",
+   "type": "CC",
+   "lgd": 251993,
+   "district": "03"
+  },
+  {
+   "name": "TIKOTA",
+   "type": "TP",
+   "lgd": 297131,
+   "district": "03"
+  },
+  {
+   "name": "BABALESHWAR",
+   "type": "TP",
+   "lgd": 299327,
+   "district": "03"
+  },
+  {
+   "name": "AFZALPURA",
+   "type": "TMC",
+   "lgd": 251849,
+   "district": "04"
+  },
+  {
+   "name": "ALAND",
+   "type": "TMC",
+   "lgd": 251848,
+   "district": "04"
+  },
+  {
+   "name": "CHINCHOLI",
+   "type": "TMC",
+   "lgd": 276568,
+   "district": "04"
+  },
+  {
+   "name": "CHITTAPURA",
+   "type": "TMC",
+   "lgd": 251853,
+   "district": "04"
+  },
+  {
+   "name": "JEWARGI",
+   "type": "TMC",
+   "lgd": 251858,
+   "district": "04"
+  },
+  {
+   "name": "KALABURAGI",
+   "type": "CC",
+   "lgd": 248127,
+   "district": "04"
+  },
+  {
+   "name": "SEDAM",
+   "type": "TMC",
+   "lgd": 251852,
+   "district": "04"
+  },
+  {
+   "name": "SHAHABAD",
+   "type": "CMC",
+   "lgd": 251855,
+   "district": "04"
+  },
+  {
+   "name": "WADI",
+   "type": "TMC",
+   "lgd": 251856,
+   "district": "04"
+  },
+  {
+   "name": "KALAGI",
+   "type": "TP",
+   "lgd": 296978,
+   "district": "04"
+  },
+  {
+   "name": "SHAHABAD",
+   "type": "NAC",
+   "lgd": 251854,
+   "district": "04"
+  },
+  {
+   "name": "KAMALAPUR",
+   "type": "TP",
+   "lgd": 301080,
+   "district": "04"
+  },
+  {
+   "name": "YADRAMI",
+   "type": "TP",
+   "lgd": 297132,
+   "district": "04"
+  },
+  {
+   "name": "AURAD",
+   "type": "TP",
+   "lgd": 251866,
+   "district": "05"
+  },
+  {
+   "name": "BASAVAKALYAN",
+   "type": "CMC",
+   "lgd": 251864,
+   "district": "05"
+  },
+  {
+   "name": "BHALKI",
+   "type": "TMC",
+   "lgd": 251865,
+   "district": "05"
+  },
+  {
+   "name": "CHITTAGUPPA",
+   "type": "TMC",
+   "lgd": 251869,
+   "district": "05"
+  },
+  {
+   "name": "HALLIKHED",
+   "type": "TMC",
+   "lgd": 277668,
+   "district": "05"
+  },
+  {
+   "name": "HUMNABAD",
+   "type": "TMC",
+   "lgd": 251868,
+   "district": "05"
+  },
+  {
+   "name": "BALAGANUR",
+   "type": "TP",
+   "lgd": 276523,
+   "district": "06"
+  },
+  {
+   "name": "DEVADURGA",
+   "type": "TMC",
+   "lgd": 251874,
+   "district": "06"
+  },
+  {
+   "name": "HATTI GOLD MINES",
+   "type": "NAC",
+   "lgd": 251872,
+   "district": "06"
+  },
+  {
+   "name": "LINGASUGUR",
+   "type": "TMC",
+   "lgd": 251871,
+   "district": "06"
+  },
+  {
+   "name": "MANVI",
+   "type": "TMC",
+   "lgd": 251877,
+   "district": "06"
+  },
+  {
+   "name": "MASKI",
+   "type": "TMC",
+   "lgd": 276519,
+   "district": "06"
+  },
+  {
+   "name": "MUDGAL",
+   "type": "TMC",
+   "lgd": 251870,
+   "district": "06"
+  },
+  {
+   "name": "RAICHUR",
+   "type": "CC",
+   "lgd": 251876,
+   "district": "06"
+  },
+  {
+   "name": "SINDANOOR",
+   "type": "CMC",
+   "lgd": 251878,
+   "district": "06"
+  },
+  {
+   "name": "SIRAWAR",
+   "type": "TP",
+   "lgd": 276605,
+   "district": "06"
+  },
+  {
+   "name": "TURVIHAL",
+   "type": "TP",
+   "lgd": 276524,
+   "district": "06"
+  },
+  {
+   "name": "HATTI",
+   "type": "TP",
+   "lgd": 251873,
+   "district": "06"
+  },
+  {
+   "name": "KAVITALA",
+   "type": "TP",
+   "lgd": 276522,
+   "district": "06"
+  },
+  {
+   "name": "BHAGYANAGAR",
+   "type": "TP",
+   "lgd": 276604,
+   "district": "07"
+  },
+  {
+   "name": "GANGAVATHI",
+   "type": "CMC",
+   "lgd": 251881,
+   "district": "07"
+  },
+  {
+   "name": "KANAKAGIRI",
+   "type": "TP",
+   "lgd": 276599,
+   "district": "07"
+  },
+  {
+   "name": "KARATAGI",
+   "type": "TMC",
+   "lgd": 276496,
+   "district": "07"
+  },
+  {
+   "name": "KOPPAL",
+   "type": "CMC",
+   "lgd": 251882,
+   "district": "07"
+  },
+  {
+   "name": "KUKANUR",
+   "type": "TP",
+   "lgd": 276497,
+   "district": "07"
+  },
+  {
+   "name": "KUSTAGI",
+   "type": "TMC",
+   "lgd": 251880,
+   "district": "07"
+  },
+  {
+   "name": "TAVARAGERA",
+   "type": "TP",
+   "lgd": 276601,
+   "district": "07"
+  },
+  {
+   "name": "YELBURGA",
+   "type": "TP",
+   "lgd": 251879,
+   "district": "07"
+  },
+  {
+   "name": "GADAG_BETAGERI",
+   "type": "CMC",
+   "lgd": 251888,
+   "district": "08"
+  },
+  {
+   "name": "GAJENDRAGADA",
+   "type": "TMC",
+   "lgd": 251886,
+   "district": "08"
+  },
+  {
+   "name": "LAKSHMESHWARA",
+   "type": "TMC",
+   "lgd": 251891,
+   "district": "08"
+  },
+  {
+   "name": "MULAGUNDA",
+   "type": "TP",
+   "lgd": 251889,
+   "district": "08"
+  },
+  {
+   "name": "MUNDARGI",
+   "type": "TMC",
+   "lgd": 251892,
+   "district": "08"
+  },
+  {
+   "name": "NAREGAL",
+   "type": "TP",
+   "lgd": 251887,
+   "district": "08"
+  },
+  {
+   "name": "NARAGUNDA",
+   "type": "TMC",
+   "lgd": 251884,
+   "district": "08"
+  },
+  {
+   "name": "RON",
+   "type": "TMC",
+   "lgd": 251885,
+   "district": "08"
+  },
+  {
+   "name": "SHIRAHATTI",
+   "type": "TP",
+   "lgd": 251890,
+   "district": "08"
+  },
+  {
+   "name": "ALNAVARA",
+   "type": "TP",
+   "lgd": 251894,
+   "district": "09"
+  },
+  {
+   "name": "ANNIGERI",
+   "type": "TMC",
+   "lgd": 251896,
+   "district": "09"
+  },
+  {
+   "name": "HUBLI DHARWAD",
+   "type": "CC",
+   "lgd": 251893,
+   "district": "09"
+  },
+  {
+   "name": "KALAGHATAGI",
+   "type": "TP",
+   "lgd": 251897,
+   "district": "09"
+  },
+  {
+   "name": "KUNDAGOL",
+   "type": "TP",
+   "lgd": 251898,
+   "district": "09"
+  },
+  {
+   "name": "NAVALAGUND",
+   "type": "TMC",
+   "lgd": 251895,
+   "district": "09"
+  },
+  {
+   "name": "ANKOLA",
+   "type": "TMC",
+   "lgd": 251906,
+   "district": "10"
+  },
+  {
+   "name": "BHATKAL",
+   "type": "CMC",
+   "lgd": 251911,
+   "district": "10"
+  },
+  {
+   "name": "DANDELI",
+   "type": "CMC",
+   "lgd": 251899,
+   "district": "10"
+  },
+  {
+   "name": "HALIYALA",
+   "type": "TMC",
+   "lgd": 251901,
+   "district": "10"
+  },
+  {
+   "name": "HONNAVARA",
+   "type": "TP",
+   "lgd": 251909,
+   "district": "10"
+  },
+  {
+   "name": "KARWAR",
+   "type": "CMC",
+   "lgd": 251900,
+   "district": "10"
+  },
+  {
+   "name": "KUMATA",
+   "type": "TMC",
+   "lgd": 251907,
+   "district": "10"
+  },
+  {
+   "name": "MUNDAGOD",
+   "type": "TP",
+   "lgd": 251904,
+   "district": "10"
+  },
+  {
+   "name": "SIDDAPURA",
+   "type": "TP",
+   "lgd": 251908,
+   "district": "10"
+  },
+  {
+   "name": "SIRSI",
+   "type": "CMC",
+   "lgd": 251905,
+   "district": "10"
+  },
+  {
+   "name": "YELLAPURA",
+   "type": "TP",
+   "lgd": 251903,
+   "district": "10"
+  },
+  {
+   "name": "BANKAPURA",
+   "type": "TMC",
+   "lgd": 251913,
+   "district": "11"
+  },
+  {
+   "name": "BYADAGI",
+   "type": "TMC",
+   "lgd": 251917,
+   "district": "11"
+  },
+  {
+   "name": "GUTTAL",
+   "type": "TP",
+   "lgd": 276521,
+   "district": "11"
+  },
+  {
+   "name": "HANAGAL",
+   "type": "TMC",
+   "lgd": 251915,
+   "district": "11"
+  },
+  {
+   "name": "HAVERI",
+   "type": "CMC",
+   "lgd": 251916,
+   "district": "11"
+  },
+  {
+   "name": "HIREKERUR",
+   "type": "TP",
+   "lgd": 251918,
+   "district": "11"
+  },
+  {
+   "name": "RANEBENNUR",
+   "type": "CMC",
+   "lgd": 251919,
+   "district": "11"
+  },
+  {
+   "name": "SAVANOOR",
+   "type": "TMC",
+   "lgd": 251914,
+   "district": "11"
+  },
+  {
+   "name": "SHIGGAON",
+   "type": "TMC",
+   "lgd": 251912,
+   "district": "11"
+  },
+  {
+   "name": "RATTIHALLI",
+   "type": "TP",
+   "lgd": 296955,
+   "district": "11"
+  },
+  {
+   "name": "BALLARI",
+   "type": "CC",
+   "lgd": 251927,
+   "district": "12"
+  },
+  {
+   "name": "KAMPLI",
+   "type": "TMC",
+   "lgd": 251924,
+   "district": "12"
+  },
+  {
+   "name": "KUDATHINI",
+   "type": "TP",
+   "lgd": 276534,
+   "district": "12"
+  },
+  {
+   "name": "KUREKUPPA",
+   "type": "TMC",
+   "lgd": 276538,
+   "district": "12"
+  },
+  {
+   "name": "KURUGODU",
+   "type": "TMC",
+   "lgd": 276532,
+   "district": "12"
+  },
+  {
+   "name": "SANDOOR",
+   "type": "TMC",
+   "lgd": 251929,
+   "district": "12"
+  },
+  {
+   "name": "SIRUGUPPA",
+   "type": "CMC",
+   "lgd": 251925,
+   "district": "12"
+  },
+  {
+   "name": "TEKKALAKOTE",
+   "type": "TP",
+   "lgd": 251926,
+   "district": "12"
+  },
+  {
+   "name": "CHALLAKERE",
+   "type": "CMC",
+   "lgd": 251933,
+   "district": "13"
+  },
+  {
+   "name": "CHITRADURGA",
+   "type": "CMC",
+   "lgd": 251934,
+   "district": "13"
+  },
+  {
+   "name": "HIRIYUR",
+   "type": "CMC",
+   "lgd": 251937,
+   "district": "13"
+  },
+  {
+   "name": "HOLALKERE",
+   "type": "TMC",
+   "lgd": 251935,
+   "district": "13"
+  },
+  {
+   "name": "HOSADURGA",
+   "type": "TMC",
+   "lgd": 251936,
+   "district": "13"
+  },
+  {
+   "name": "MOLAKALMURU",
+   "type": "TP",
+   "lgd": 251932,
+   "district": "13"
+  },
+  {
+   "name": "NAYAKANAHATTI",
+   "type": "TP",
+   "lgd": 276542,
+   "district": "13"
+  },
+  {
+   "name": "CHANNAGIRI",
+   "type": "TMC",
+   "lgd": 251943,
+   "district": "14"
+  },
+  {
+   "name": "DAVANAGERE",
+   "type": "CC",
+   "lgd": 251941,
+   "district": "14"
+  },
+  {
+   "name": "HARIHAR",
+   "type": "CMC",
+   "lgd": 251938,
+   "district": "14"
+  },
+  {
+   "name": "HONNALI",
+   "type": "TMC",
+   "lgd": 251942,
+   "district": "14"
+  },
+  {
+   "name": "JAGALUR",
+   "type": "TP",
+   "lgd": 251940,
+   "district": "14"
+  },
+  {
+   "name": "MALEBENNURU",
+   "type": "TMC",
+   "lgd": 276556,
+   "district": "14"
+  },
+  {
+   "name": "NYAMTHI",
+   "type": "TP",
+   "lgd": 299183,
+   "district": "14"
+  },
+  {
+   "name": "BHADRAVATHI",
+   "type": "CMC",
+   "lgd": 251952,
+   "district": "15"
+  },
+  {
+   "name": "HOSANAGARA",
+   "type": "TP",
+   "lgd": 251949,
+   "district": "15"
+  },
+  {
+   "name": "KARGAL",
+   "type": "TP",
+   "lgd": 263293,
+   "district": "15"
+  },
+  {
+   "name": "SAGARA",
+   "type": "CMC",
+   "lgd": 251945,
+   "district": "15"
+  },
+  {
+   "name": "SHIKARIPURA",
+   "type": "TMC",
+   "lgd": 251948,
+   "district": "15"
+  },
+  {
+   "name": "SHIRLAKOPPA",
+   "type": "TMC",
+   "lgd": 251947,
+   "district": "15"
+  },
+  {
+   "name": "SHIVAMOGGA",
+   "type": "CC",
+   "lgd": 251951,
+   "district": "15"
+  },
+  {
+   "name": "SORABA",
+   "type": "TMC",
+   "lgd": 251946,
+   "district": "15"
+  },
+  {
+   "name": "THIRTHAHALLI",
+   "type": "TP",
+   "lgd": 251950,
+   "district": "15"
+  },
+  {
+   "name": "ANAVATTI",
+   "type": "TP",
+   "lgd": 299181,
+   "district": "15"
+  },
+  {
+   "name": "HOLEHONNURU",
+   "type": "TP",
+   "lgd": 299180,
+   "district": "15"
+  },
+  {
+   "name": "KARKALA",
+   "type": "TMC",
+   "lgd": 251958,
+   "district": "16"
+  },
+  {
+   "name": "KAUP",
+   "type": "TMC",
+   "lgd": 301055,
+   "district": "16"
+  },
+  {
+   "name": "KUNDAPUR",
+   "type": "TMC",
+   "lgd": 251953,
+   "district": "16"
+  },
+  {
+   "name": "SALIGRAMA",
+   "type": "TP",
+   "lgd": 251954,
+   "district": "16"
+  },
+  {
+   "name": "UDUPI",
+   "type": "CMC",
+   "lgd": 251955,
+   "district": "16"
+  },
+  {
+   "name": "BYNDURU",
+   "type": "TP",
+   "lgd": 297129,
+   "district": "16"
+  },
+  {
+   "name": "BIRUR",
+   "type": "TMC",
+   "lgd": 251963,
+   "district": "17"
+  },
+  {
+   "name": "CHIKKAMAGALURU",
+   "type": "CMC",
+   "lgd": 251965,
+   "district": "17"
+  },
+  {
+   "name": "KADUR",
+   "type": "TMC",
+   "lgd": 251964,
+   "district": "17"
+  },
+  {
+   "name": "KOPPA",
+   "type": "TP",
+   "lgd": 251960,
+   "district": "17"
+  },
+  {
+   "name": "MUDIGERE",
+   "type": "TP",
+   "lgd": 301082,
+   "district": "17"
+  },
+  {
+   "name": "NARASIMHARAJAPURA",
+   "type": "TP",
+   "lgd": 251961,
+   "district": "17"
+  },
+  {
+   "name": "SHRINGERI",
+   "type": "TP",
+   "lgd": 251959,
+   "district": "17"
+  },
+  {
+   "name": "TARIKERE",
+   "type": "TMC",
+   "lgd": 251962,
+   "district": "17"
+  },
+  {
+   "name": "AJJAMPURA",
+   "type": "TP",
+   "lgd": 296977,
+   "district": "17"
+  },
+  {
+   "name": "KUDEREMUKHA",
+   "type": "NAC",
+   "lgd": 251967,
+   "district": "17"
+  },
+  {
+   "name": "CHIKKANAYAKANAHALLI",
+   "type": "TMC",
+   "lgd": 251968,
+   "district": "18"
+  },
+  {
+   "name": "GUBBI",
+   "type": "TP",
+   "lgd": 251974,
+   "district": "18"
+  },
+  {
+   "name": "KORATAGERE",
+   "type": "TP",
+   "lgd": 251972,
+   "district": "18"
+  },
+  {
+   "name": "KUNIGAL",
+   "type": "TMC",
+   "lgd": 251977,
+   "district": "18"
+  },
+  {
+   "name": "PAVAGADA",
+   "type": "TMC",
+   "lgd": 251970,
+   "district": "18"
+  },
+  {
+   "name": "SIRA",
+   "type": "CMC",
+   "lgd": 251969,
+   "district": "18"
+  },
+  {
+   "name": "TIPTUR",
+   "type": "CMC",
+   "lgd": 251975,
+   "district": "18"
+  },
+  {
+   "name": "TUMAKURU",
+   "type": "CC",
+   "lgd": 251973,
+   "district": "18"
+  },
+  {
+   "name": "TURUVEKERE",
+   "type": "TP",
+   "lgd": 251976,
+   "district": "18"
+  },
+  {
+   "name": "HULIYARU",
+   "type": "TP",
+   "lgd": 297133,
+   "district": "18"
+  },
+  {
+   "name": "BANGARPET",
+   "type": "TMC",
+   "lgd": 299416,
+   "district": "19"
+  },
+  {
+   "name": "KOLAR",
+   "type": "CMC",
+   "lgd": 251985,
+   "district": "19"
+  },
+  {
+   "name": "MALUR",
+   "type": "CMC",
+   "lgd": 251986,
+   "district": "19"
+  },
+  {
+   "name": "MULBAGILU",
+   "type": "CMC",
+   "lgd": 251989,
+   "district": "19"
+  },
+  {
+   "name": "ROBERTSONPET",
+   "type": "CMC",
+   "lgd": 251988,
+   "district": "19"
+  },
+  {
+   "name": "SRINIVASAPURA",
+   "type": "TMC",
+   "lgd": 251984,
+   "district": "19"
+  },
+  {
+   "name": "ANEKAL",
+   "type": "TMC",
+   "lgd": 253189,
+   "district": "20"
+  },
+  {
+   "name": "ATTIBELE",
+   "type": "TMC",
+   "lgd": 276539,
+   "district": "20"
+  },
+  {
+   "name": "BOMMASANDRA",
+   "type": "TMC",
+   "lgd": 276537,
+   "district": "20"
+  },
+  {
+   "name": "CHANDAPURA",
+   "type": "TMC",
+   "lgd": 276533,
+   "district": "20"
+  },
+  {
+   "name": "HEBBAGODI",
+   "type": "CMC",
+   "lgd": 276463,
+   "district": "20"
+  },
+  {
+   "name": "JIGANI",
+   "type": "TMC",
+   "lgd": 276464,
+   "district": "20"
+  },
+  {
+   "name": "HUNASEMAARANA HALLI",
+   "type": "TMC",
+   "lgd": 299319,
+   "district": "20"
+  },
+  {
+   "name": "DEVANAHALLI",
+   "type": "TMC",
+   "lgd": 251994,
+   "district": "21"
+  },
+  {
+   "name": "DODDABALLAPUR",
+   "type": "CMC",
+   "lgd": 251992,
+   "district": "21"
+  },
+  {
+   "name": "HOSKOTE",
+   "type": "CMC",
+   "lgd": 251995,
+   "district": "21"
+  },
+  {
+   "name": "NELMANGALA",
+   "type": "CMC",
+   "lgd": 251990,
+   "district": "21"
+  },
+  {
+   "name": "VIJAYAPURA",
+   "type": "TMC",
+   "lgd": 251842,
+   "district": "21"
+  },
+  {
+   "name": "BASHETTIHALLI",
+   "type": "TP",
+   "lgd": 299169,
+   "district": "21"
+  },
+  {
+   "name": "KRISHNARAJAPETE",
+   "type": "TMC",
+   "lgd": 252001,
+   "district": "22"
+  },
+  {
+   "name": "MADDUR",
+   "type": "CMC",
+   "lgd": 252006,
+   "district": "22"
+  },
+  {
+   "name": "MALAVALLI",
+   "type": "TMC",
+   "lgd": 252007,
+   "district": "22"
+  },
+  {
+   "name": "MANDYA",
+   "type": "CMC",
+   "lgd": 252005,
+   "district": "22"
+  },
+  {
+   "name": "NAGAMANGALA",
+   "type": "TMC",
+   "lgd": 252002,
+   "district": "22"
+  },
+  {
+   "name": "PANDAVAPURA",
+   "type": "TMC",
+   "lgd": 252003,
+   "district": "22"
+  },
+  {
+   "name": "SRIRANGAPATNA",
+   "type": "TMC",
+   "lgd": 252004,
+   "district": "22"
+  },
+  {
+   "name": "BELLURU",
+   "type": "TP",
+   "lgd": 276602,
+   "district": "22"
+  },
+  {
+   "name": "ALUR",
+   "type": "TP",
+   "lgd": 252013,
+   "district": "23"
+  },
+  {
+   "name": "ARKALGUDU",
+   "type": "TP",
+   "lgd": 252014,
+   "district": "23"
+  },
+  {
+   "name": "ARSIKERE",
+   "type": "CMC",
+   "lgd": 252010,
+   "district": "23"
+  },
+  {
+   "name": "BELUR",
+   "type": "TMC",
+   "lgd": 252009,
+   "district": "23"
+  },
+  {
+   "name": "CHANNARAYANAPATNA",
+   "type": "TMC",
+   "lgd": 252016,
+   "district": "23"
+  },
+  {
+   "name": "HOLENARSIPURA",
+   "type": "TMC",
+   "lgd": 252015,
+   "district": "23"
+  },
+  {
+   "name": "SAKALESHPURA",
+   "type": "TMC",
+   "lgd": 252008,
+   "district": "23"
+  },
+  {
+   "name": "BANTWAL",
+   "type": "TMC",
+   "lgd": 252033,
+   "district": "24"
+  },
+  {
+   "name": "BELTHANGADI",
+   "type": "TP",
+   "lgd": 252034,
+   "district": "24"
+  },
+  {
+   "name": "KOTEKAR",
+   "type": "TP",
+   "lgd": 276555,
+   "district": "24"
+  },
+  {
+   "name": "MANGALURU",
+   "type": "CC",
+   "lgd": 252021,
+   "district": "24"
+  },
+  {
+   "name": "MOODBIDRI",
+   "type": "TMC",
+   "lgd": 252018,
+   "district": "24"
+  },
+  {
+   "name": "MULKI",
+   "type": "TP",
+   "lgd": 252017,
+   "district": "24"
+  },
+  {
+   "name": "PUTTUR",
+   "type": "CMC",
+   "lgd": 252035,
+   "district": "24"
+  },
+  {
+   "name": "SULYA",
+   "type": "TP",
+   "lgd": 252036,
+   "district": "24"
+  },
+  {
+   "name": "ULLAL",
+   "type": "CMC",
+   "lgd": 252027,
+   "district": "24"
+  },
+  {
+   "name": "VITLA",
+   "type": "TP",
+   "lgd": 276554,
+   "district": "24"
+  },
+  {
+   "name": "KADABA",
+   "type": "TP",
+   "lgd": 296954,
+   "district": "24"
+  },
+  {
+   "name": "SOMESHWARA",
+   "type": "TMC",
+   "lgd": 252029,
+   "district": "24"
+  },
+  {
+   "name": "KINNIGOLI",
+   "type": "TP",
+   "lgd": 299321,
+   "district": "24"
+  },
+  {
+   "name": "BAJAPE",
+   "type": "TP",
+   "lgd": 299320,
+   "district": "24"
+  },
+  {
+   "name": "KUSHALNAGARA",
+   "type": "TMC",
+   "lgd": 252039,
+   "district": "25"
+  },
+  {
+   "name": "MADIKERE",
+   "type": "CMC",
+   "lgd": 252037,
+   "district": "25"
+  },
+  {
+   "name": "SOMVARPET",
+   "type": "TP",
+   "lgd": 252038,
+   "district": "25"
+  },
+  {
+   "name": "VIRAJPET",
+   "type": "TMC",
+   "lgd": 252040,
+   "district": "25"
+  },
+  {
+   "name": "BANNUR",
+   "type": "TMC",
+   "lgd": 252051,
+   "district": "26"
+  },
+  {
+   "name": "H.D.KOTE",
+   "type": "TMC",
+   "lgd": 252049,
+   "district": "26"
+  },
+  {
+   "name": "HUNSUR",
+   "type": "CMC",
+   "lgd": 252043,
+   "district": "26"
+  },
+  {
+   "name": "K.R.NAGAR",
+   "type": "TMC",
+   "lgd": 301081,
+   "district": "26"
+  },
+  {
+   "name": "NANJANAGUD",
+   "type": "CMC",
+   "lgd": 252050,
+   "district": "26"
+  },
+  {
+   "name": "PERIYAPATNA",
+   "type": "TMC",
+   "lgd": 252042,
+   "district": "26"
+  },
+  {
+   "name": "SARGUR",
+   "type": "TP",
+   "lgd": 253132,
+   "district": "26"
+  },
+  {
+   "name": "T.NARASIPURA",
+   "type": "TMC",
+   "lgd": 252052,
+   "district": "26"
+  },
+  {
+   "name": "CHAMARAJANAGARA",
+   "type": "CMC",
+   "lgd": 252054,
+   "district": "27"
+  },
+  {
+   "name": "GUNDLUPETE",
+   "type": "TMC",
+   "lgd": 252053,
+   "district": "27"
+  },
+  {
+   "name": "HANUR",
+   "type": "TP",
+   "lgd": 253130,
+   "district": "27"
+  },
+  {
+   "name": "KOLLEGAL",
+   "type": "CMC",
+   "lgd": 252056,
+   "district": "27"
+  },
+  {
+   "name": "YELANDUR",
+   "type": "TP",
+   "lgd": 252055,
+   "district": "27"
+  },
+  {
+   "name": "BAGEPALLI",
+   "type": "TMC",
+   "lgd": 251981,
+   "district": "28"
+  },
+  {
+   "name": "CHIKKABALLAPUR",
+   "type": "CMC",
+   "lgd": 251979,
+   "district": "28"
+  },
+  {
+   "name": "CHINTAMANI",
+   "type": "CMC",
+   "lgd": 251983,
+   "district": "28"
+  },
+  {
+   "name": "GOWRIBIDANUR",
+   "type": "CMC",
+   "lgd": 251978,
+   "district": "28"
+  },
+  {
+   "name": "GUDIBANDE",
+   "type": "TP",
+   "lgd": 251980,
+   "district": "28"
+  },
+  {
+   "name": "SHIDLAGHATTA",
+   "type": "CMC",
+   "lgd": 251982,
+   "district": "28"
+  },
+  {
+   "name": "BIDADI",
+   "type": "TMC",
+   "lgd": 276526,
+   "district": "29"
+  },
+  {
+   "name": "CHANNAPATNA",
+   "type": "CMC",
+   "lgd": 253185,
+   "district": "29"
+  },
+  {
+   "name": "KANAKAPURA",
+   "type": "CMC",
+   "lgd": 253188,
+   "district": "29"
+  },
+  {
+   "name": "MAGADI",
+   "type": "TMC",
+   "lgd": 251996,
+   "district": "29"
+  },
+  {
+   "name": "RAMANAGARA",
+   "type": "CMC",
+   "lgd": 253186,
+   "district": "29"
+  },
+  {
+   "name": "GURUMATKAL",
+   "type": "TMC",
+   "lgd": 251862,
+   "district": "30"
+  },
+  {
+   "name": "KAKKERA",
+   "type": "TMC",
+   "lgd": 276560,
+   "district": "30"
+  },
+  {
+   "name": "KEMBHAVI",
+   "type": "TMC",
+   "lgd": 276516,
+   "district": "30"
+  },
+  {
+   "name": "SHAHAPURA",
+   "type": "CMC",
+   "lgd": 251861,
+   "district": "30"
+  },
+  {
+   "name": "SHORAPURA_SURAPURA",
+   "type": "CMC",
+   "lgd": 251859,
+   "district": "30"
+  },
+  {
+   "name": "YADGIR",
+   "type": "CMC",
+   "lgd": 251863,
+   "district": "30"
+  },
+  {
+   "name": "HUNASAGI",
+   "type": "TP",
+   "lgd": 296976,
+   "district": "30"
+  },
+  {
+   "name": "BHEEMARAYANGUDI",
+   "type": "NAC",
+   "lgd": 251860,
+   "district": "30"
+  },
+  {
+   "name": "MARIYAMMANAHALLI",
+   "type": "TP",
+   "lgd": 276474,
+   "district": "31"
+  },
+  {
+   "name": "HAGARIBOMMANAHALLI",
+   "type": "TMC",
+   "lgd": 276535,
+   "district": "31"
+  },
+  {
+   "name": "HOOVINA HADAGALI",
+   "type": "TMC",
+   "lgd": 251921,
+   "district": "31"
+  },
+  {
+   "name": "HOSPET",
+   "type": "CMC",
+   "lgd": 251922,
+   "district": "31"
+  },
+  {
+   "name": "KAMALAPURA",
+   "type": "TMC",
+   "lgd": 276611,
+   "district": "31"
+  },
+  {
+   "name": "KUDALAGI",
+   "type": "TP",
+   "lgd": 251930,
+   "district": "31"
+  },
+  {
+   "name": "KOTTUR",
+   "type": "TP",
+   "lgd": 251931,
+   "district": "31"
+  },
+  {
+   "name": "HARAPANAHALLI",
+   "type": "CMC",
+   "lgd": 251939,
+   "district": "31"
+  },
+  {
+   "name": "BORAGAON",
+   "type": "TP",
+   "lgd": 276583,
+   "district": "01"
+  },
+  {
+   "name": "CHIKKABANAVARA",
+   "type": "TMC",
+   "lgd": 299318,
+   "district": "20"
+  },
+  {
+   "name": "MADANAYAKANAHALLI",
+   "type": "CMC",
+   "lgd": 296975,
+   "district": "20"
+  },
+  {
+   "name": "VEMGAL-KURUGOL",
+   "type": "TP",
+   "lgd": 301054,
+   "district": "19"
+  },
+  {
+   "name": "KONAPPANAAGRAHARA",
+   "type": "TMC",
+   "lgd": 301790,
+   "district": "20"
+  },
+  {
+   "name": "HASSAN",
+   "type": "CC",
+   "lgd": 252012,
+   "district": "23"
+  },
+  {
+   "name": "BIDAR",
+   "type": "CC",
+   "lgd": 251867,
+   "district": "05"
+  },
+  {
+   "name": "ANKALAGI-AKKATHANGERAHAL",
+   "type": "TP",
+   "lgd": 299329,
+   "district": "01"
+  },
+  {
+   "name": "HAROHALLI",
+   "type": "TP",
+   "lgd": 299326,
+   "district": "29"
+  },
+  {
+   "name": "JAMAKHANDI",
+   "type": "CMC",
+   "lgd": 251832,
+   "district": "02"
+  },
+  {
+   "name": "YARAGATTI",
+   "type": "TP",
+   "lgd": 299330,
+   "district": "01"
+  },
+  {
+   "name": "BADAMI",
+   "type": "TMC",
+   "lgd": 251837,
+   "district": "02"
+  },
+  {
+   "name": "MADHUGIRI",
+   "type": "TMC",
+   "lgd": 251971,
+   "district": "18"
+  },
+  {
+   "name": "KUDACHI",
+   "type": "TMC",
+   "lgd": 251813,
+   "district": "01"
+  },
+  {
+   "name": "KAIWARA",
+   "type": "TP",
+   "lgd": 305605,
+   "district": "28"
+  },
+  {
+   "name": "KAGAWADA",
+   "type": "TP",
+   "lgd": 299331,
+   "district": "01"
+  },
+  {
+   "name": "MACHHE",
+   "type": "TP",
+   "lgd": 299332,
+   "district": "01"
+  },
+  {
+   "name": "ELCITA",
+   "type": "",
+   "lgd": null,
+   "district": null
+  },
+  {
+   "name": "BOGADI",
+   "type": "TP",
+   "lgd": 299334,
+   "district": "26"
+  },
+  {
+   "name": "HOOTAGALLI",
+   "type": "CMC",
+   "lgd": 299335,
+   "district": "26"
+  },
+  {
+   "name": "MYSURU",
+   "type": "CC",
+   "lgd": 252045,
+   "district": "26"
+  },
+  {
+   "name": "RAMMANAHALLI",
+   "type": "TP",
+   "lgd": 299322,
+   "district": "26"
+  },
+  {
+   "name": "SRIRAMPURA",
+   "type": "TP",
+   "lgd": 299325,
+   "district": "26"
+  },
+  {
+   "name": "KADAKOLA",
+   "type": "TP",
+   "lgd": 299323,
+   "district": "26"
+  },
+  {
+   "name": "DODDATHOGURU",
+   "type": "TP",
+   "lgd": 301176,
+   "district": "20"
+  },
+  {
+   "name": "MUDHOL",
+   "type": "CMC",
+   "lgd": 251835,
+   "district": "02"
+  },
+  {
+   "name": "GBA - West",
+   "type": "CC",
+   "lgd": 305854,
+   "district": "20"
+  },
+  {
+   "name": "GBA - North",
+   "type": "CC",
+   "lgd": 305853,
+   "district": "20"
+  },
+  {
+   "name": "GBA - East",
+   "type": "CC",
+   "lgd": 305850,
+   "district": "20"
+  },
+  {
+   "name": "GBA - Central",
+   "type": "CC",
+   "lgd": 305851,
+   "district": "20"
+  },
+  {
+   "name": "GBA - South",
+   "type": "CC",
+   "lgd": 305852,
+   "district": "20"
+  }
+ ]
+}
