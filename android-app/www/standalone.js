@@ -364,10 +364,12 @@ Decide whether the photo clearly shows a pothole on a road surface.
   // body owns the road. No town but a gram panchayat means rural Karnataka, which belongs
   // to PWD or the panchayat engineering department. Neither means the point is outside
   // Karnataka altogether. An empty features array is a normal 200, not an error.
-  async function nhQuery(lat, lng) {
+  // One shared retry for the state GIS. Both callers fail closed on null, so a blip
+  // costs a refusal the user can retry, never a wrong answer stated confidently.
+  async function retryQuery(url, lat, lng, fields) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const r = await fetchWithTimeout(kgisPoint(KGIS_NH_URL, lat, lng, "Name"), {}, 8000);
+        const r = await fetchWithTimeout(kgisPoint(url, lat, lng, fields), {}, 8000);
         if (r.ok) return r;
       } catch (e) { /* fall through to the retry */ }
     }
@@ -391,7 +393,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
       // Retried once, because this check fails closed: a momentary blip on the state's
       // server refuses a report the app could have routed, and there are now two calls
       // per report where there used to be one.
-      nhQuery(lat, lng),
+      retryQuery(KGIS_NH_URL, lat, lng, "Name"),
     ]);
     if (!town.ok) throw new Error("jurisdiction lookup unavailable");
     // Fail closed, but not into offline(): that fallback only knows Bengaluru, so a
@@ -412,12 +414,15 @@ Decide whether the photo clearly shows a pothole on a road surface.
     }
     // Electronics City is the one town row with a blank type and no codes, so it lands
     // here as a named body with no LGD: still refused, but by name rather than silently.
-    const gp = await fetchWithTimeout(kgisPoint(KGIS_GP_URL, lat, lng, "KGISGPName"), {}, 10000);
-    if (gp.ok) {
-      const g = (await gp.json()).features || [];
-      const name = g.length && (g[0].attributes || {}).KGISGPName;
-      if (name && String(name).trim()) return { kind: "rural", name: String(name).trim() };
-    }
+    // "Outside Karnataka" is only true when the state actually answered and placed the
+    // point in no town and no panchayat. If this query fails, we know nothing, and
+    // saying "outside Karnataka" to someone standing on a village road in Magadi is
+    // simply a lie. Retried for the same reason the highway check is.
+    const gp = await retryQuery(KGIS_GP_URL, lat, lng, "KGISGPName");
+    if (!gp) return { kind: "road_class_unknown" };
+    const g = (await gp.json()).features || [];
+    const name = g.length && (g[0].attributes || {}).KGISGPName;
+    if (name && String(name).trim()) return { kind: "rural", name: String(name).trim() };
     return { kind: "outside_state" };
   }
 
