@@ -38,7 +38,6 @@
     "bengaluru south city corporation": ["Commissioner, Bengaluru South City Corporation (BSCC)", "comm.south.gba@gmail.com"],
     "bengaluru west city corporation": ["Commissioner, Bengaluru West City Corporation (BWCC)", "commissioner.bwcc@gmail.com"],
   };
-  const HQ = ["Commissioner, Greater Bengaluru Authority (HQ)", "comm@bbmp.gov.in"];
 
   // Karnataka jurisdiction lookup.
   //
@@ -81,8 +80,6 @@
     }
     return false; // no location at all: we cannot claim to know who is responsible
   }
-  const hasLocation = (lat, lng, address) =>
-    (lat != null && lng != null && !Number.isNaN(lat) && !Number.isNaN(lng)) || !!address;
 
   const DETECT_PROMPT = `You are inspecting a road photo taken in Bengaluru for a civic complaint app.
 
@@ -384,8 +381,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
     // the highway network, on the host this already calls, so the two questions are asked
     // together and the answer costs no extra wait.
     const [town, nh] = await Promise.all([
-      fetchWithTimeout(kgisPoint(KGIS_TOWN_URL, lat, lng,
-        "KGISTownName,Town_Type,KGISTownCode,LGD_TownCode"), {}, 10000),
+      retryQuery(KGIS_TOWN_URL, lat, lng, "KGISTownName,Town_Type,KGISTownCode,LGD_TownCode"),
       // Exact containment only. A buffer picks up OBJECTID 3059, Bengaluru's MG Road,
       // which this land-cover layer misclassifies as National Highway, and that would
       // start refusing genuine city reports in the densest coverage area.
@@ -395,7 +391,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
       // per report where there used to be one.
       retryQuery(KGIS_NH_URL, lat, lng, "Name"),
     ]);
-    if (!town.ok) throw new Error("jurisdiction lookup unavailable");
+    if (!town) return { kind: "road_class_unknown" };
     // Fail closed, but not into offline(): that fallback only knows Bengaluru, so a
     // failed highway check there refused every report in the rest of the state and
     // called it "outside Karnataka". An unanswered road-class check is its own outcome.
@@ -441,33 +437,23 @@ Decide whether the photo clearly shows a pothole on a road surface.
   async function routeOfficer(address, lat, lng) {
     const registry = await bodies();
 
-    // Bengaluru without the network: the common case must not depend on the state GIS.
-    const offline = () => {
-      if (!inCoverage(lat, lng, address)) return [null, null, "outside_area"];
-      if (address) {
-        const low = address.toLowerCase();
-        // Whole words only. Plain substring matching resolved a Bengaluru address to
-        // "Chief Officer, Alur", because "alur" is inside "bengaluru".
-        const named = (name) => {
-          const n = name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          return new RegExp(`(^|[^a-z])${n}([^a-z]|$)`).test(low);
-        };
-        for (const [code, b] of Object.entries(registry)) {
-          if (b.email && named(b.name)) {
-            return [`${b.officer}, ${b.name}${b.short ? ` (${b.short})` : ""}`, b.email, null];
-          }
-        }
-      }
-      return [HQ[0], HQ[1], null];
-    };
 
     if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) {
-      return hasLocation(lat, lng, address) ? offline() : [null, null, "no_location"];
+      return [null, null, "no_location"];
     }
 
+    // If the state cannot tell us what this road is, we do not name anyone. The highway
+    // check lives inside kgisJurisdiction, so any path that routes without it can address
+    // a Commissioner for a carriageway NHAI owns: with the GIS blocked, NH48 at
+    // Nelamangala produced a send-ready draft to comm@bbmp.gov.in, because it sits inside
+    // the old Bengaluru bounding box that the fallback trusted.
+    //
+    // Nothing is lost by refusing. Detection itself needs the network, so there is no
+    // offline report to route; this path only fires when OpenAI is reachable and the
+    // state GIS is not, and in that case the road's owner is genuinely unknown.
     let where;
     try { where = await jurisdictionOf(lat, lng); }
-    catch (e) { return offline(); }               // GIS down: fall back, do not fail
+    catch (e) { return [null, null, "road_class_unknown"]; }
 
     if (where.kind === "outside_state") return [null, null, "outside_area"];
     if (where.kind === "national_highway") return [null, null, "national_highway", where.name];
