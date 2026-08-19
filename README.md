@@ -102,6 +102,9 @@ Sahaaya 2.0.
 
 ## Contracts
 
+Every data source is documented, with commands to verify each one, in
+[docs/SOURCES.md](docs/SOURCES.md).
+
 The APK bundles 42,283 awarded road-work contracts pulled from KPPP, Karnataka's
 procurement portal, covering the whole state. When a match clears a confidence gate the
 complaint names the tender, always as a probable match for the officer to verify.
