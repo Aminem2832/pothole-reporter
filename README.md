@@ -115,11 +115,7 @@ and says plainly that no bidder is recorded rather than inventing one. Award rec
 carry no defect liability period either, so warranty status is inferred from the
 publication date and stated as a possibility, never a fact.
 
-Refresh: `python3 tools/pull-kppp.py`. When a match clears a confidence gate, the complaint names the
-tender and the contractor, always as a probable match for the officer to verify.
-Award records carry no defect liability period, so warranty status is inferred from
-the publication date and is stated as a possibility, never a fact.
-
+Refresh with `python3 tools/pull-kppp.py`.
 
 ## Cost
 
@@ -159,11 +155,13 @@ affiliated with GBA, BBMP or any government body.
 
 ## Credits
 
-Contract data from the public-domain KPPP snapshot at
+Contracts from [KPPP](https://kppp.karnataka.gov.in), the Karnataka Public Procurement
+Portal, with contractor names from the public-domain snapshot at
 [bengaluru-road-contracts.pages.dev](https://bengaluru-road-contracts.pages.dev).
-Officer directory from the official GBA site. Geocoding by OpenStreetMap Nominatim,
-maps by [Leaflet](https://leafletjs.com). Detection and drafting by OpenAI vision
-models.
+Boundaries from [KGIS](https://kgis.ksrsac.in), run by KSRSAC. Officer addresses from
+district NIC sites and the bodies' own sites. Geocoding by OpenStreetMap Nominatim, maps
+by [Leaflet](https://leafletjs.com). Detection and drafting by OpenAI vision models.
+Full provenance in [docs/SOURCES.md](docs/SOURCES.md).
 
 ## License
 
