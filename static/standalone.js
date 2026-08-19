@@ -185,17 +185,37 @@ Decide whether the photo clearly shows a pothole on a road surface.
   // The early verdict must apply the same rule as the final one, or a low-confidence
   // true would announce a pothole the pipeline then rejects. A false needs no
   // confidence to be final, so the early "no" stays as fast as the flag itself.
+  // The delimiter is not optional. A number arrives in pieces, so "0.8" can be read
+  // mid-stream as "0." and parse to 0, which would announce "no pothole" for a real one
+  // and reject a frame the model accepted. Requiring the comma or brace that closes the
+  // value means we only ever read a finished number.
+  const CONF_RE = /"confidence"\s*:\s*([0-9]*\.?[0-9]+)\s*[,}]/;
+  const POTHOLE_RE = /"is_pothole"\s*:\s*(true|false)/;
+
   const peekVerdict = (partial) => {
-    const m = /"is_pothole"\s*:\s*(true|false)/.exec(partial);
+    const m = POTHOLE_RE.exec(partial);
     if (!m) return null;
     if (m[1] === "false") return { is_pothole: false, size: null };
-    const c = /"confidence"\s*:\s*([0-9]*\.?[0-9]+)/.exec(partial);
+    const c = CONF_RE.exec(partial);
     if (!c) return null;
     const s = /"size"\s*:\s*(?:"(small|medium|large)"|null)/.exec(partial);
     return { is_pothole: parseFloat(c[1]) >= MIN_CONFIDENCE, size: s ? s[1] || null : null };
   };
 
-  function drainSSE(chunk, state, onEarly) {
+  // True once the response has already proved this frame will be rejected. Drive Mode
+  // reads nothing but is_pothole and confidence for a rejected frame, so everything the
+  // model writes after this point (size, the speed-breaker flag, a sentence of
+  // description) is generated and then thrown away. Stopping here changes no verdict:
+  // the bytes that decide it have already arrived and are identical either way.
+  const peekReject = (partial) => {
+    const m = POTHOLE_RE.exec(partial);
+    if (!m) return false;
+    if (m[1] === "false") return true;
+    const c = CONF_RE.exec(partial);
+    return !!c && parseFloat(c[1]) < MIN_CONFIDENCE;
+  };
+
+  function drainSSE(chunk, state, onEarly, stopWhenRejected) {
     state.buf += chunk;
     let i;
     while ((i = state.buf.indexOf("\n")) >= 0) {
@@ -212,11 +232,12 @@ Decide whether the photo clearly shows a pothole on a road surface.
           const v = peekVerdict(state.text);
           if (v) { state.early = true; try { onEarly(v); } catch (e) {} }
         }
+        if (stopWhenRejected && !state.stop && peekReject(state.text)) state.stop = true;
       }
     }
   }
 
-  async function oaiStream(body, onEarly) {
+  async function oaiStream(body, onEarly, stopWhenRejected) {
     if (!S.key) throw new Error("OpenAI API key missing. Tap the gear icon and paste it.");
     const res = await fetchWithTimeout(OAI_URL, {
       method: "POST", headers: authHeaders(),
@@ -224,22 +245,42 @@ Decide whether the photo clearly shows a pothole on a road surface.
     });
     if (!res.ok) throw await statusError(res);
 
-    const state = { buf: "", text: "", early: false };
+    const state = { buf: "", text: "", early: false, stop: false };
     if (res.body && typeof res.body.getReader === "function") {
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        drainSSE(dec.decode(value, { stream: true }), state, onEarly);
+        drainSSE(dec.decode(value, { stream: true }), state, onEarly, stopWhenRejected);
+        if (state.stop) { try { await reader.cancel(); } catch (e) {} break; }
       }
     } else {
-      // Buffered transports (the native HTTP bridge) hand back the whole SSE body at once.
-      drainSSE(await res.text(), state, onEarly);
+      // Buffered transports (the native HTTP bridge) hand back the whole SSE body at once,
+      // so there is nothing left to stop early: the tokens were already generated.
+      drainSSE(await res.text(), state, onEarly, stopWhenRejected);
     }
-    drainSSE("\n", state, onEarly);
+    if (state.stop) return rejectedVerdict(state.text);
+    drainSSE("\n", state, onEarly, stopWhenRejected);
+    if (state.stop) return rejectedVerdict(state.text);
     if (!state.text) throw new Error("Empty model response.");
     return JSON.parse(state.text);
+  }
+
+  // Reconstructed from the part of the response that had already arrived. The JSON is
+  // deliberately incomplete, so it is built by hand rather than parsed. Only is_pothole
+  // and confidence are read on the path that receives this, and both are present by
+  // definition: nothing sets state.stop until they are.
+  function rejectedVerdict(text) {
+    const m = POTHOLE_RE.exec(text);
+    const c = CONF_RE.exec(text);
+    return {
+      is_pothole: !!m && m[1] === "true",
+      confidence: c ? parseFloat(c[1]) : 0,
+      size: null,
+      looks_like_speed_breaker: false,
+      description: "",
+    };
   }
 
   const fmt = (name, schema) => ({
@@ -250,7 +291,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
   const emitVerdict = (v) => { try { window.dispatchEvent(new CustomEvent("pipeline-verdict", { detail: v })); } catch (e) {} };
 
   let streamBroken = false;
-  async function analyzeImage(dataUrl, prompt, name, schema, model, onEarly) {
+  async function analyzeImage(dataUrl, prompt, name, schema, model, onEarly, stopWhenRejected) {
     const body = {
       model,
       input: [{ role: "user", content: [
@@ -259,9 +300,9 @@ Decide whether the photo clearly shows a pothole on a road surface.
       ] }],
       text: fmt(name, schema),
     };
-    if (!onEarly || streamBroken) return oai(body);
+    if ((!onEarly && !stopWhenRejected) || streamBroken) return oai(body);
     try {
-      return await oaiStream(body, onEarly);
+      return await oaiStream(body, onEarly, stopWhenRejected);
     } catch (e) {
       // A bad key or a rate limit fails identically unstreamed, so surface those.
       if (e && e.fatal) throw e;
@@ -323,6 +364,16 @@ Decide whether the photo clearly shows a pothole on a road surface.
   // body owns the road. No town but a gram panchayat means rural Karnataka, which belongs
   // to PWD or the panchayat engineering department. Neither means the point is outside
   // Karnataka altogether. An empty features array is a normal 200, not an error.
+  async function nhQuery(lat, lng) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetchWithTimeout(kgisPoint(KGIS_NH_URL, lat, lng, "Name"), {}, 8000);
+        if (r.ok) return r;
+      } catch (e) { /* fall through to the retry */ }
+    }
+    return null;
+  }
+
   async function kgisJurisdiction(lat, lng) {
     // Which polygon contains this point answers WHERE the pothole is, not WHO owns the
     // road. A national highway is a line that crosses town boundaries, so containment
@@ -336,13 +387,17 @@ Decide whether the photo clearly shows a pothole on a road surface.
       // Exact containment only. A buffer picks up OBJECTID 3059, Bengaluru's MG Road,
       // which this land-cover layer misclassifies as National Highway, and that would
       // start refusing genuine city reports in the densest coverage area.
-      fetchWithTimeout(kgisPoint(KGIS_NH_URL, lat, lng, "Name"), {}, 10000)
-        .catch(() => null),
+      //
+      // Retried once, because this check fails closed: a momentary blip on the state's
+      // server refuses a report the app could have routed, and there are now two calls
+      // per report where there used to be one.
+      nhQuery(lat, lng),
     ]);
     if (!town.ok) throw new Error("jurisdiction lookup unavailable");
-    // Fail closed. Treating an unanswered highway check as "not a highway" and going on
-    // to name a Chief Officer is exactly the bug this gate exists to stop.
-    if (!nh || !nh.ok) throw new Error("jurisdiction lookup unavailable");
+    // Fail closed, but not into offline(): that fallback only knows Bengaluru, so a
+    // failed highway check there refused every report in the rest of the state and
+    // called it "outside Karnataka". An unanswered road-class check is its own outcome.
+    if (!nh || !nh.ok) return { kind: "road_class_unknown" };
     const h = (await nh.json()).features || [];
     if (h.length) {
       const road = ((h[0].attributes || {}).Name || "").trim();
@@ -386,8 +441,14 @@ Decide whether the photo clearly shows a pothole on a road surface.
       if (!inCoverage(lat, lng, address)) return [null, null, "outside_area"];
       if (address) {
         const low = address.toLowerCase();
+        // Whole words only. Plain substring matching resolved a Bengaluru address to
+        // "Chief Officer, Alur", because "alur" is inside "bengaluru".
+        const named = (name) => {
+          const n = name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          return new RegExp(`(^|[^a-z])${n}([^a-z]|$)`).test(low);
+        };
         for (const [code, b] of Object.entries(registry)) {
-          if (b.email && low.includes(b.name.toLowerCase())) {
+          if (b.email && named(b.name)) {
             return [`${b.officer}, ${b.name}${b.short ? ` (${b.short})` : ""}`, b.email, null];
           }
         }
@@ -405,6 +466,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
 
     if (where.kind === "outside_state") return [null, null, "outside_area"];
     if (where.kind === "national_highway") return [null, null, "national_highway", where.name];
+    if (where.kind === "road_class_unknown") return [null, null, "road_class_unknown"];
     if (where.kind === "rural") return [null, null, "rural_road", where.name];
 
     const entry = where.lgd && registry[where.lgd];
@@ -745,8 +807,11 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
       : "");
     // Single shot has one verdict on screen, so show it the moment it streams in.
     // Drive Mode analyses run concurrently and report through the HUD instead.
+    // Drive Mode has no verdict on screen to update, so it passed no callback and took
+    // the unstreamed path, waiting for a description it discards on every rejected frame.
+    // It streams now purely to stop as soon as the frame is known to be rejected.
     const a = await analyzeImage(dataUrl, detectPrompt, "assessment", ASSESS_SCHEMA, MODEL,
-      driveMode ? null : emitVerdict);
+      driveMode ? null : emitVerdict, driveMode);
     const accepted = a.is_pothole && a.confidence >= MIN_CONFIDENCE;
     if (driveMode && !accepted) return { found: false };
 
@@ -989,6 +1054,7 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
         // confusing when the real problem is that the phone never got a GPS fix.
         throw new Error({
           no_location: "This report has no location, so there is no way to tell which office is responsible. Retake it with location switched on.",
+          road_class_unknown: "The app could not check whether this road is a national highway, and it will not name a city officer for a road that may not be theirs. Try again when you have a signal.",
           national_highway: "This stretch is a national highway. It is maintained by NHAI or the state PWD National Highways division, not by the city or town body, so there is no municipal officer to address.",
           rural_road: "This road is outside every town boundary, so it belongs to the state PWD or a panchayat rather than a city body. The app will not guess an office.",
           no_address: "This town's body is known, but no official email address for it has been published, so there is no verified recipient to address.",
