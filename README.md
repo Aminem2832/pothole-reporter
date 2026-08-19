@@ -16,6 +16,11 @@ city to keep up with; a complaint that arrives with a photograph, exact coordina
 the right office and the relevant contract is simply easier to act on than one that
 does not. That is the whole idea.
 
+**It works in Karnataka today.** The officer directory, the road contracts and the
+boundary data are all Karnataka's. A pothole anywhere else is photographed and saved, but
+the app will not name a recipient it cannot verify, so it refuses rather than sending your
+complaint to the wrong office. Other states are the next piece of work, not a solved one.
+
 No server, no backend, no credentials in the APK. Everything runs on the phone.
 
 ![How a photo becomes a complaint](docs/architecture.png)
