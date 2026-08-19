@@ -33,10 +33,10 @@ Not an illustration. This photo, this output, from the app on a phone.
 
 | | |
 |---|---|
-| Verdict | **medium pothole**, confidence 0.78 |
-| Address | 17th Main Road, Sector 3, HSR Layout, Bengaluru, 560102 |
+| Verdict | **medium pothole**, confidence 0.72 |
+| Address | 17th Main Road, HSR Layout, Bengaluru, 560102 |
 | Routed to | Commissioner, Bengaluru South City Corporation |
-| Probable contract | `BBMP/2024-25/RD/WORK_INDENT3877`, SANGAMESH INFRASTRUCTURE |
+| Probable contract | `BBMP/2025-26/OW/WORK_INDENT7739`, SOMANATH MALLAPPA HUNDRE |
 
 And the complaint it drafted:
 
@@ -45,14 +45,14 @@ Dear Commissioner, Bengaluru South City Corporation (BSCC),
 
 I would like to report a pothole that needs repair.
 
-Location: 17th Main Road, Sector 3, HSR Layout, Bengaluru, 560102
+Location: 17th Main Road, HSR Layout, Bengaluru, 560102
 Coordinates: 12.911500, 77.642700
 Map link: https://maps.google.com/?q=12.911500,77.642700
 Approximate size: medium
 
 PFA image. This pothole poses a danger to two wheeler riders and other road users. I request the city corporation to inspect and repair it at the earliest, and to route it to the contractor responsible if this road section is still under a maintenance warranty.
 
-Public procurement records indicate this road stretch probably falls under tender BBMP/2024-25/RD/WORK_INDENT3877 ("Pothole Filling Works under Maintenance Works in Ward No. 221-HSR Layout for the year 2024-25 in Bommanahalli Division."), published on 13-09-2024, with SHARANAPPA SANGAMESH( SANGAMESH INFRASTRUCTURE INDIA PRIVATE LIMITED ) recorded as the winning bidder, and it may still be within the maintenance period.
+Public procurement records indicate this road stretch probably falls under tender BBMP/2025-26/OW/WORK_INDENT7739 ("Pothole Filling Works under Maintenance Works in Ward No.221 - HSR Layout."), published on 23-06-2025, with SOMANATH MALLAPPA HUNDRE recorded as the winning bidder, and it may still be within the maintenance period.
 
 If the defect liability or maintenance period is in force, I request that the repair be carried out by the contractor at no additional cost to the corporation. This is a probable record match; kindly verify against the tender documents.
 
@@ -61,6 +61,10 @@ Thank you for your service to the city.
 Regards,
 Gaurav Sen
 ```
+
+Captured from the app on a phone on 20 August 2026. The contract, the officer and the
+size reproduce run to run; the confidence figure moves by a few points, as a model output
+does. The name at the end is whatever you set in Settings.
 
 That last paragraph is the point. A pothole on a road still under warranty should be
 repaired by the contractor at no further cost to the public.
@@ -103,7 +107,8 @@ The APK bundles 42,283 awarded road-work contracts from KPPP, Karnataka's procur
 portal. When a match clears a confidence gate, the complaint names the tender.
 
 - **Only the officer's own works count.** A Commissioner cannot enforce a state PWD,
-  panchayat or irrigation contract, so those 23,311 rows are never named in their letter.
+  panchayat or irrigation contract, so 28,706 of the 42,283 rows can never be named in
+  their letter, leaving 13,577 that can.
 - **1,124 contracts name a contractor.** The portal's search results omit the winning
   bidder, so elsewhere the complaint says plainly that none is recorded.
 - **Warranty is inferred from the publication date**, since award records carry no defect
