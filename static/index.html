@@ -763,11 +763,26 @@ async function driveTick() {
   for (const s of drive.foundSpots) {
     if (distMeters(s, pos) < 15) { updateHud(); return; }
   }
+  // Keep the preview alive. Android pauses a video element on all sorts of events and
+  // nothing here ever restarted it, so a single pause froze the feed for the rest of
+  // the drive.
+  if (video.paused || video.ended) { try { video.play(); } catch (e) {} }
   const track = drive.stream && drive.stream.getVideoTracks && drive.stream.getVideoTracks()[0];
-  if (!track || track.readyState !== "live" || track.muted || video.readyState < 2) {
-    updateHud(t("camera_lost"));
-    return;   // a call or another app took the camera: the preview is a still image now
+  // Only a genuinely ended track is a lost camera. `muted` flickers true on Android
+  // whenever the source briefly cannot supply frames, and treating one tick of that as
+  // "camera gone" stopped scanning constantly.
+  const dead = !track || track.readyState === "ended";
+  const stalled = track && (track.muted || video.readyState < 2);
+  if (dead) {
+    drive.camBad = 99;
+  } else if (stalled) {
+    drive.camBad = (drive.camBad || 0) + 1;
+  } else if (drive.camBad) {
+    drive.camBad = 0;                       // recovered: say nothing, just carry on
   }
+  // ~3 seconds of continuous stall before admitting anything, and it clears itself.
+  if (drive.camBad >= 8) { updateHud(t("camera_lost")); return; }
+  if (drive.camBad) return;                 // brief blip: skip this frame, stay quiet
   if (drive.stillBusy) return; // one still capture at a time; the camera track is not reentrant
   drive.lastCapPos = pos;
   drive.lastCapAt = Date.now();
@@ -917,6 +932,7 @@ async function writeManifest(driveId, entries) {
 let recCtx = null;
 
 function startRecording(stream, driveId) {
+  if (localStorage.getItem("record_video") === "0") return;   // switch, for ruling it out
   if (typeof MediaRecorder === "undefined") return;
   const mime = RECORD_MIMES.find((t) => { try { return MediaRecorder.isTypeSupported(t); } catch (e) { return false; } });
   if (!mime) return;
