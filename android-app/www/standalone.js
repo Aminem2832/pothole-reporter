@@ -344,6 +344,16 @@ Decide whether the photo clearly shows a pothole on a road surface.
 
   // Resolves the officer to address, or [null, null] with a reason. Every path that
   // cannot name a real body returns nothing rather than a plausible-looking guess.
+  // One GIS answer per location, shared by contract lookup and officer routing. Both
+  // need it, and asking twice would double the latency of the one network call on the
+  // critical path.
+  let _jurKey = null, _jurP = null;
+  function jurisdictionOf(lat, lng) {
+    const key = `${lat},${lng}`;
+    if (_jurKey !== key) { _jurKey = key; _jurP = kgisJurisdiction(lat, lng); }
+    return _jurP;
+  }
+
   async function routeOfficer(address, lat, lng) {
     const registry = await bodies();
 
@@ -366,7 +376,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
     }
 
     let where;
-    try { where = await kgisJurisdiction(lat, lng); }
+    try { where = await jurisdictionOf(lat, lng); }
     catch (e) { return offline(); }               // GIS down: fall back, do not fail
 
     if (where.kind === "outside_state") return [null, null, "outside_area"];
@@ -398,13 +408,40 @@ Decide whether the photo clearly shows a pothole on a road surface.
     return _tenders;
   }
 
+  // Contracts grouped by the body that awarded them, built once. Each municipal row
+  // carries the LGD code of its body (stamped by tools/index-tenders.py), and the state
+  // GIS gives the same code for the pothole, so picking the right shortlist is a lookup
+  // rather than a scan of every municipal contract in Karnataka.
+  let _byBody = null;
+  async function tendersFor(lgd) {
+    if (!_byBody) {
+      _byBody = new Map();
+      for (const t of await tenders()) {
+        if (!t.b) continue;
+        let list = _byBody.get(t.b);
+        if (!list) { list = []; _byBody.set(t.b, list); }
+        list.push(t);
+      }
+    }
+    if (!lgd) return [];
+    const own = _byBody.get(String(lgd)) || [];
+    // Bengaluru's five corporations replaced BBMP in 2025 and inherited its works, which
+    // the award records still file under BBMP zones. Zone to corporation is not
+    // published, so all five share that legacy pool.
+    const legacy = BLR_BODIES.has(String(lgd)) ? (_byBody.get("BLR") || []) : [];
+    return legacy.length ? own.concat(legacy) : own;
+  }
+
+
+  // The five corporations that replaced BBMP in 2025 and share its legacy contract pool.
+  const BLR_BODIES = new Set(["305850", "305851", "305852", "305853", "305854"]);
 
   const TENDER_STOP = new Set(["road", "roads", "street", "cross", "main", "layout", "bengaluru", "bangalore",
     "karnataka", "india", "ward", "city", "corporation", "south", "north", "east",
     "west", "central", "urban", "sector", "stage", "block", "phase"]);
 
-  async function matchTender(address) {
-    if (!address || !S.key) return null;
+  async function matchTender(address, lgd) {
+    if (!address || !S.key || !lgd) return null;
     const tokens = new Set();
     for (const part of address.split(",").slice(0, 4)) {
       for (const w of part.trim().toLowerCase().replace(/[()]/g, " ").split(/\s+/)) {
@@ -412,28 +449,50 @@ Decide whether the photo clearly shows a pothole on a road surface.
       }
     }
     if (!tokens.size) return null;
-    // A complaint only ever reaches a municipal officer: rural and out-of-state reports
-    // refuse to route, so the addressee is always a Commissioner or Chief Officer. They
-    // can enforce their own body's works (DMA contracts, plus legacy BBMP ones in
-    // Bengaluru) but hold no standing over a state PWD, RDPR panchayat or irrigation
-    // contract. Naming one of those in their letter points them at work that is not
-    // theirs to act on, so those contracts are not candidates at all. Widen this list
-    // when the app learns to address PWD and panchayat engineers directly.
+    // Only this body's own contracts are candidates. That is what makes naming one safe:
+    // the officer receiving the letter awarded the work. It also rules out the failure
+    // this matcher used to be vulnerable to, a contract from a different town whose road
+    // name happened to match, and it rules out state PWD, panchayat and irrigation
+    // contracts, which a municipal officer has no standing over.
+    const pool = await tendersFor(lgd);
+    if (!pool.length) return null;
+    const hays = pool.map((t) => (t.t + " " + t.loc).toLowerCase());
+
+    // Weight each word by how rare it is inside this body's own contracts. Counting
+    // matched words equally does not work here: the town's name appears in most of its
+    // own work titles, so "Vidyanagar, Hubli" scored a ward-48 Vidyanagar contract the
+    // same as eighty unrelated ones that merely said Hubli, and the right one was cut by
+    // the shortlist. The locality is the word that identifies a road; the town name is
+    // noise once the pool is already that town.
+    const idf = new Map();
+    for (const tok of tokens) {
+      let df = 0;
+      for (const hay of hays) if (hay.includes(tok)) df++;
+      // A word in none of this body's contracts is no evidence, and a word in most of
+      // them (the town's own name) does not distinguish one road from another. Only
+      // words in between say anything about WHICH stretch this is.
+      if (df > 0 && df <= pool.length * 0.5) {
+        idf.set(tok, Math.log((pool.length + 1) / (df + 1)));
+      }
+    }
+    // Nothing in the address narrows the pool below "somewhere in this town". Naming a
+    // contract on that basis is a guess, and this letter goes to a public official with
+    // a private company named in it, so it names nothing instead.
+    if (!idf.size) return null;
     const scored = [];
-    for (const t of await tenders()) {
-      const agency = (t.tn || "").split("/")[0].toUpperCase();
-      if (agency !== "DMA" && agency !== "BBMP") continue;
-      const hay = (t.t + " " + t.loc).toLowerCase();
+    for (let i = 0; i < pool.length; i++) {
       let score = 0;
-      for (const tok of tokens) if (hay.includes(tok)) score++;
-      if (score >= 1) scored.push([score, t]);
+      for (const [tok, w] of idf) if (hays[i].includes(tok)) score += w;
+      if (score > 0) scored.push([score, pool[i]]);
     }
     scored.sort((a, b) => b[0] - a[0]);
     const candidates = scored.slice(0, 25).map((x) => x[1]);
     if (!candidates.length) return null;
     const listing = candidates.map((t, i) =>
       `${i}: ${t.t.slice(0, 150)} | ${t.loc} | contractor: ${t.c || "not named"} | published: ${t.d}`).join("\n");
-    const prompt = `You match a pothole's location to Karnataka municipal road-work contracts.
+    const prompt = `You match a pothole's location to road-work contracts awarded by the
+local body that owns this road. Every candidate below was awarded by that same body, so
+the town is already correct and your only job is whether the work covers this stretch.
 The pothole's reverse-geocoded address is:
 ${address}
 
@@ -441,10 +500,10 @@ Candidate contracts (index: work description | division | contractor | published
 ${listing}
 
 Pick the single contract whose work description covers this exact road stretch or
-its immediate locality (same layout, ward or named road). Road and locality names
-repeat across Karnataka, and these candidates are drawn from the whole state, so the
-town and ward context must agree, not just the road name. A contract in a different
-town is wrong however well the road name matches. A ward-wide maintenance or pothole-filling contract for the pothole's
+its immediate locality (same layout, ward or named road). Road names repeat across
+localities within a town, so the locality or ward context must agree, not just the
+road name. A ward-wide maintenance or pothole-filling contract for the pothole's own
+locality or ward is a valid match. A ward-wide maintenance or pothole-filling contract for the pothole's
 own layout or ward is a valid match. If no candidate clearly covers this location,
 match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     let m;
@@ -647,11 +706,15 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     // feels it. Drive Mode rejects most frames and reports through the HUD, so
     // speculating there would buy nothing and bill a text call per frame.
     // Coordinates settle coverage on their own; only a missing fix has to wait for the
-    // address. Speculating on contracts outside Bengaluru would match a road name in
-    // the wrong city, so it is not started at all.
+    // address. The contract shortlist needs the owning body, so the GIS lookup starts
+    // here rather than after detection: it is one short request and it runs while the
+    // photo is being analysed, so it costs nothing on the clock. routeOfficer shares
+    // this same answer instead of asking again.
     const coordCoverage = (lat != null && lng != null) ? inCoverage(lat, lng, null) : null;
     const tenderP = (driveMode || coordCoverage === false) ? null
-      : geoP.then((g) => (inCoverage(lat, lng, shortOf(g)) ? matchTender(shortOf(g)) : null)).catch(() => null);
+      : Promise.all([geoP, jurisdictionOf(lat, lng)])
+          .then(([g, w]) => (w && w.kind === "town" && w.lgd ? matchTender(shortOf(g), w.lgd) : null))
+          .catch(() => null);
     const detectPrompt = DETECT_PROMPT + (LANG() === "kn"
       ? "\n- Write the description field in formal Kannada (ಕನ್ನಡ ಭಾಷೆಯಲ್ಲಿ ಬರೆಯಿರಿ)."
       : "");
@@ -668,8 +731,14 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     const [officerName, officerEmail, unroutedReason, bodyName] = accepted
       ? await routeOfficer((geo && geo.full) || address, lat, lng) : [null, null, null, null];
     const covered = accepted && !!officerEmail;
+    // Drive Mode does not speculate (it would bill a text call for every frame, and most
+    // frames are rejected), so an accepted drive pothole matches its contract here, once
+    // it is known to be worth a complaint. The GIS answer is already memoised, so this
+    // costs no extra network call.
     const tender = accepted && covered
-      ? await (tenderP || matchTender(address).catch(() => null))
+      ? await (tenderP || jurisdictionOf(lat, lng)
+          .then((w) => (w && w.kind === "town" && w.lgd ? matchTender(address, w.lgd) : null))
+          .catch(() => null))
       : null;
     if (accepted) progress(pmsg("write"));
     // No authority means no complaint. The photo, verdict and location are still kept,
