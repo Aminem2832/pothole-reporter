@@ -379,6 +379,14 @@ Decide whether the photo clearly shows a pothole on a road surface.
     return null;
   }
 
+  // ArcGIS reports failures as HTTP 200 with an error body and no features array, so a
+  // bad query, an unavailable layer or a service error all look identical to "nothing
+  // here" if the array is defaulted to empty. On the highway layer that meant the gate
+  // failed OPEN and a national highway was addressed to a municipal officer. Returns null
+  // when the service did not actually answer.
+  const featuresOf = (body) =>
+    (body && Array.isArray(body.features) && !body.error) ? body.features : null;
+
   async function kgisJurisdiction(lat, lng) {
     // Which polygon contains this point answers WHERE the pothole is, not WHO owns the
     // road. A national highway is a line that crosses town boundaries, so containment
@@ -402,12 +410,16 @@ Decide whether the photo clearly shows a pothole on a road surface.
     // failed highway check there refused every report in the rest of the state and
     // called it "outside Karnataka". An unanswered road-class check is its own outcome.
     if (!nh || !nh.ok) return { kind: "road_class_unknown" };
-    const h = (await nh.json()).features || [];
+    const h = featuresOf(await nh.json());
+    // A missing features array means the service did not answer the question. Reading it
+    // as "no highway here" is the same failure as not asking at all.
+    if (h === null) return { kind: "road_class_unknown" };
     if (h.length) {
       const road = ((h[0].attributes || {}).Name || "").trim();
       return { kind: "national_highway", name: road || null };
     }
-    const t = (await town.json()).features || [];
+    const t = featuresOf(await town.json());
+    if (t === null) return { kind: "road_class_unknown" };
     if (t.length) {
       const a = t[0].attributes || {};
       return { kind: "town", name: a.KGISTownName || null,
@@ -422,7 +434,8 @@ Decide whether the photo clearly shows a pothole on a road surface.
     // simply a lie. Retried for the same reason the highway check is.
     const gp = await retryQuery(KGIS_GP_URL, lat, lng, "KGISGPName");
     if (!gp) return { kind: "road_class_unknown" };
-    const g = (await gp.json()).features || [];
+    const g = featuresOf(await gp.json());
+    if (g === null) return { kind: "road_class_unknown" };
     const name = g.length && (g[0].attributes || {}).KGISGPName;
     if (name && String(name).trim()) return { kind: "rural", name: String(name).trim() };
     return { kind: "outside_state" };

@@ -52,6 +52,28 @@ with sync_playwright() as p:
             fails.append(f"{name}: status {r['status']}, expected unrouted")
     b.close()
 
+# ArcGIS reports failures as HTTP 200 with an error body and no features array. Defaulting
+# that to an empty array reads as "no highway here", which is the gate failing open: the
+# exact bug it exists to prevent, arriving through a different door.
+print("\n  with the GIS answering 200 but with an error body:")
+with sync_playwright() as p:
+    b = p.chromium.launch(args=["--disable-web-security", "--allow-running-insecure-content"])
+    ctx = b.new_context(viewport={"width": 390, "height": 844})
+    ctx.route("**://kgis.ksrsac.in/**", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body='{"error":{"code":500,"message":"Unable to complete operation."}}'))
+    pg = ctx.new_page()
+    pg.goto(f"http://localhost:8765/?key={KEY}"); pg.wait_for_load_state("networkidle")
+    src = base64.standard_b64encode(IMG.read_bytes()).decode()
+    for name, lat, lng in CASES:
+        r = pg.evaluate(POST, [src, lat, lng])
+        print(f"    {name:22} status={r['status']:9} reason={str(r['reason'] or '-'):20} email={r['email'] or '-'}")
+        if r["email"]:
+            fails.append(f"{name}: named {r['email']} when the GIS returned an error body, so the highway check failed open")
+        if r["status"] != "unrouted":
+            fails.append(f"{name}: status {r['status']} on an error body, expected unrouted")
+    b.close()
+
 if fails:
     print("\nFAIL"); [print("  -", f) for f in fails]; sys.exit(1)
 print("\nGIS FAILURE TEST PASS")
