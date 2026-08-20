@@ -11,7 +11,7 @@ sleep 2
 trap 'pkill -f "http.server 8765" >/dev/null 2>&1' EXIT
 
 fail=0
-for t in ui_text_test routing_test nh_test gis_failure_test; do
+for t in ui_text_test routing_test nh_test gis_failure_test footage_test; do
   printf "%-18s " "$t"
   if out=$($PY "tests/$t.py" 2>&1); then
     echo "${out##*$'\n'}"

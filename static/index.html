@@ -223,6 +223,9 @@ const I18N = {
     analysing: "Frame {i} of {n} · {found} new",
     analyse_done: "Footage analysed: {found} new potholes from {n} frames.",
     analyse_none: "No footage stored for this drive.",
+    analysing_dup: "({n} already reported)",
+    analyse_dup: "{n} of them were already reported.",
+    frames_no_permission: "Saving frames to storage was not permitted. Analyse anyway without saving them?",
     analysing_failed: "· {n} failed",
     analyse_incomplete: "Could not finish: {failed} of {n} frames were not checked ({err}) So no result is being claimed, and the video has been kept.",
     debug_note: "On: the video survives analysis, so a drive can be re-examined or re-run against a better model. Off: the video is deleted once its potholes have been extracted.",
@@ -320,6 +323,9 @@ const I18N = {
     analysing: "ಫ್ರೇಮ್ {i}/{n} · {found} ಹೊಸ",
     analyse_done: "ವಿಶ್ಲೇಷಣೆ ಮುಗಿಯಿತು: {n} ಫ್ರೇಮ್‌ಗಳಿಂದ {found} ಹೊಸ ಗುಂಡಿಗಳು.",
     analyse_none: "ಈ ಡ್ರೈವ್‌ಗೆ ವಿಡಿಯೋ ಇಲ್ಲ.",
+    analysing_dup: "({n} ಈಗಾಗಲೇ ವರದಿ)",
+    analyse_dup: "ಅವುಗಳಲ್ಲಿ {n} ಈಗಾಗಲೇ ವರದಿಯಾಗಿವೆ.",
+    frames_no_permission: "ಫ್ರೇಮ್‌ಗಳನ್ನು ಉಳಿಸಲು ಅನುಮತಿ ಸಿಗಲಿಲ್ಲ. ಉಳಿಸದೆ ವಿಶ್ಲೇಷಣೆ ಮುಂದುವರಿಸಬೇಕೆ?",
     analysing_failed: "· {n} ವಿಫಲ",
     analyse_incomplete: "ಪೂರ್ಣಗೊಳಿಸಲಾಗಲಿಲ್ಲ: {n} ರಲ್ಲಿ {failed} ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಲಾಗಿಲ್ಲ ({err}) ಆದ್ದರಿಂದ ಯಾವುದೇ ಫಲಿತಾಂಶ ಹೇಳುತ್ತಿಲ್ಲ, ವಿಡಿಯೋ ಉಳಿಸಲಾಗಿದೆ.",
     debug_note: "ಆನ್: ವಿಶ್ಲೇಷಣೆಯ ನಂತರವೂ ವಿಡಿಯೋ ಉಳಿಯುತ್ತದೆ. ಆಫ್: ಗುಂಡಿಗಳನ್ನು ತೆಗೆದ ನಂತರ ವಿಡಿಯೋ ಅಳಿಸಲಾಗುತ್ತದೆ.",
@@ -953,6 +959,25 @@ const keepFrames = () => localStorage.getItem("keep_frames") === "1";
 // do, and a drive's worth of frames in the camera roll would bury real photos.
 const FRAME_DIR = "pothole-frames";
 
+// Storage is requested once, before an analysis begins, so the dialog appears at a moment
+// the user can connect to something they just tapped. It used to fire from the first
+// per-frame write, partway through a run.
+async function ensureFrameStorage() {
+  const P = window.Capacitor && Capacitor.Plugins;
+  if (!P || !P.Filesystem) return false;
+  try {
+    if (P.Filesystem.checkPermissions) {
+      const c = await P.Filesystem.checkPermissions();
+      if (c && c.publicStorage === "granted") return true;
+    }
+    if (P.Filesystem.requestPermissions) {
+      const r = await P.Filesystem.requestPermissions();
+      return !!(r && r.publicStorage === "granted");
+    }
+    return true;   // older plugin versions expose neither and write regardless
+  } catch (e) { return false; }
+}
+
 async function writeFrameFile(driveId, index, blob) {
   const P = window.Capacitor && Capacitor.Plugins;
   if (!P || !P.Filesystem) return null;
@@ -1152,19 +1177,28 @@ async function analyseFootage(driveId, driveRec) {
   catch (e) { alert(t("analyse_none")); return; }
   if (!footage.blobs.length) { alert(t("analyse_none")); return; }
 
+  const saveToDisk = keepFrames();
+  // Ask for storage once, here, before anything starts. This used to fire from the first
+  // per-frame write, so the permission dialog appeared partway through an analysis with
+  // no explanation of what had asked for it.
+  if (saveToDisk && !(await ensureFrameStorage())) {
+    if (!confirm(t("frames_no_permission"))) return;
+  }
+
   show("progress");
   $("progressPhoto").src = "";
-  $("progressText").innerHTML = t("analysing", { i: 0, n: "?", found: 0 });
 
   const track = (driveRec && driveRec.gps_track) || [];
-  const canvas = document.createElement("canvas");
   const pending = [];
-  let found = 0, done = 0, planned = 0, elapsed = 0;
+  let found = 0, already = 0, done = 0, elapsed = 0;
   let failed = 0, consecutive = 0, lastErr = "", aborted = false;
-  const saveToDisk = keepFrames();
   const manifest = [];
   let written = 0, writeFailed = false;
 
+  // Open every clip first, so the total is known before the first frame is checked. The
+  // count used to be discovered as the loop walked the video, so it read "1 of 2" and
+  // then "2 of 3": the denominator grew while the user watched it.
+  const clips = [];
   for (const clip of footage.blobs) {
     const url = URL.createObjectURL(clip);
     const v = document.createElement("video");
@@ -1174,72 +1208,111 @@ async function analyseFootage(driveId, driveRec) {
       v.onerror = () => res({ error: true });
     });
     if (meta.error || !isFinite(meta.dur) || meta.dur <= 0) { URL.revokeObjectURL(url); continue; }
+    const times = [];
+    for (let at = Math.min(0.2, meta.dur / 2); at < meta.dur; at += VOD_STEP_S) times.push(at);
+    clips.push({ url, dur: meta.dur, times, blob: clip });
+    v.src = ""; // the pool opens its own elements; this one was only for the duration
+  }
+  const total = clips.reduce((n, c) => n + c.times.length, 0);
+  if (!total) { show("home"); alert(t("analyse_none")); return; }
+  const paint = () => {
+    $("progressText").innerHTML = t("analysing", { i: done, n: total, found })
+      + (already ? " " + t("analysing_dup", { n: already }) : "")
+      + (failed ? " " + t("analysing_failed", { n: failed }) : "");
+  };
+  paint();
 
-    const grab = (at) => new Promise((res) => {
+  // Seeking is the bottleneck, not the model. One video element seeking frame by frame
+  // serialises the whole analysis behind the slowest part of it, so several elements
+  // seek at once and the extraction overlaps the detection instead of blocking it.
+  const SEEKERS = 3;
+  const canvasFor = () => document.createElement("canvas");
+
+  async function grabFrom(v, canvas, at) {
+    return new Promise((res) => {
+      let settled = false;
+      const finish = (b) => { if (!settled) { settled = true; res(b); } };
       v.onseeked = () => {
         const scale = Math.min(1, 2000 / Math.max(v.videoWidth, v.videoHeight));
         canvas.width = Math.round(v.videoWidth * scale);
         canvas.height = Math.round(v.videoHeight * scale);
         canvas.getContext("2d").drawImage(v, 0, 0, canvas.width, canvas.height);
-        canvas.toBlob((bl) => res(bl), "image/jpeg", 0.85);
+        canvas.toBlob(finish, "image/jpeg", 0.85);
       };
+      v.onerror = () => finish(null);
+      // A seek that never lands must not hang the whole run.
+      setTimeout(() => finish(null), 8000);
       v.currentTime = at;
     });
+  }
 
-    for (let at = Math.min(0.2, meta.dur / 2); at < meta.dur; at += VOD_STEP_S) {
-      planned++;
-      const blob = await grab(at);           // seeking is serial on one element
-      if (!blob) { done++; continue; }
-      const pos = gpsAt(track, elapsed + at);
-      const fd = new FormData();
-      fd.append("photo", blob, "vod.jpg");
-      if (pos) { fd.append("lat", String(pos.lat)); fd.append("lng", String(pos.lng)); }
-      fd.append("drive_id", String(driveId));
-      fd.append("dedupe_all", "1");
-      const frameNo = planned - 1, atAbs = elapsed + at;
-      pending.push(api("/api/frame", { method: "POST", body: fd })
-        .then(async (r) => {
-          consecutive = 0;
-          if (r && r.found) found++;
-          // Every frame is written, not only the finds: an evaluation set is worthless
-          // without the frames the model rejected.
-          if (!saveToDisk || writeFailed) return;
-          try {
-            const file = await writeFrameFile(driveId, frameNo, blob);
-            if (!file) { writeFailed = true; return; }
-            written++;
-            const rep = r && r.report;
-            manifest.push({ file: file.split("/").pop(), at_seconds: +atAbs.toFixed(2),
-              lat: pos ? pos.lat : null, lng: pos ? pos.lng : null,
-              model_said: rep
-                ? { is_pothole: !!rep.is_pothole, size: rep.size, confidence: rep.confidence }
-                : { is_pothole: false, skipped: !!(r && r.skipped) } });
-          } catch (e) { writeFailed = true; }
-        })
-        .catch((e) => {
-          failed++; consecutive++;
-          lastErr = (e && e.message) || String(e);
-        })
-        .finally(() => {
-          done++;
-          $("progressText").innerHTML = t("analysing", { i: done, n: planned, found })
-            + (failed ? " " + t("analysing_failed", { n: failed }) : "");
-        }));
-      if (pending.length >= MAX_IN_FLIGHT) await Promise.race(pending.splice(0, 1));
-      if (consecutive >= 5) { aborted = true; break; }
-    }
-    elapsed += meta.dur;
-    URL.revokeObjectURL(url);
+  let frameNo = -1;
+  for (const clip of clips) {
     if (aborted) break;
+    // One element per seeker, all on the same clip, each taking every SEEKERS-th frame.
+    const pool = [];
+    for (let k = 0; k < SEEKERS; k++) {
+      const v = document.createElement("video");
+      v.muted = true; v.preload = "auto"; v.src = clip.url;
+      await new Promise((res) => { v.onloadedmetadata = res; v.onerror = res; });
+      pool.push({ v, canvas: canvasFor() });
+    }
+
+    const base = frameNo + 1;
+    await Promise.all(pool.map(async (slot, k) => {
+      for (let idx = k; idx < clip.times.length; idx += SEEKERS) {
+        if (aborted) return;
+        const at = clip.times[idx];
+        const blob = await grabFrom(slot.v, slot.canvas, at);
+        if (!blob) { done++; paint(); continue; }
+        const pos = gpsAt(track, elapsed + at);
+        const fd = new FormData();
+        fd.append("photo", blob, "vod.jpg");
+        if (pos) { fd.append("lat", String(pos.lat)); fd.append("lng", String(pos.lng)); }
+        fd.append("drive_id", String(driveId));
+        fd.append("dedupe_all", "1");
+        const myFrame = base + idx, atAbs = elapsed + at;
+        pending.push(api("/api/frame", { method: "POST", body: fd })
+          .then(async (r) => {
+            consecutive = 0;
+            // A frame the model called a pothole counts as found even when it matched a
+            // pothole already reported. Counting only new reports is why a drive whose
+            // live pass had already caught everything reported "0 potholes found".
+            if (r && r.found) found++;
+            else if (r && r.skipped) { already++; found++; }
+            if (!saveToDisk || writeFailed) return;
+            try {
+              const file = await writeFrameFile(driveId, myFrame, blob);
+              if (!file) { writeFailed = true; return; }
+              written++;
+              const rep = r && r.report;
+              manifest.push({ file: file.split("/").pop(), at_seconds: +atAbs.toFixed(2),
+                lat: pos ? pos.lat : null, lng: pos ? pos.lng : null,
+                model_said: rep
+                  ? { is_pothole: !!rep.is_pothole, size: rep.size, confidence: rep.confidence }
+                  : { is_pothole: false, skipped: !!(r && r.skipped) } });
+            } catch (e) { writeFailed = true; }
+          })
+          .catch((e) => {
+            failed++; consecutive++;
+            lastErr = (e && e.message) || String(e);
+          })
+          .finally(() => { done++; paint(); }));
+        if (pending.length >= MAX_IN_FLIGHT) await Promise.race(pending.splice(0, 1));
+        if (consecutive >= 5) { aborted = true; return; }
+      }
+    }));
+
+    for (const slot of pool) { slot.v.src = ""; }
+    frameNo = base + clip.times.length - 1;
+    elapsed += clip.dur;
   }
 
   await Promise.allSettled(pending);
+  for (const c of clips) URL.revokeObjectURL(c.url);
   if (saveToDisk && written) {
     try { await writeManifest(driveId, manifest); } catch (e) { writeFailed = true; }
   }
-  // Retention: potholes are kept as stills either way, rejected frames were never
-  // stored, and the footage itself only survives in debug mode. Deleting it is safe
-  // precisely because the analysis that just ran is what extracted everything wanted.
   let freed = 0;
   if (!isDebug() && !failed) {
     try {
@@ -1255,11 +1328,10 @@ async function analyseFootage(driveId, driveRec) {
   const diskNote = !saveToDisk ? ""
     : (written ? " " + t("frames_saved", { n: written, dir: `${FRAME_DIR}/${driveId}` })
                : " " + t("frames_failed"));
-  // When frames failed, do not lead with a pothole count: "0 potholes" on a road that
-  // was never actually checked is the most damaging thing this screen could say.
   const headline = failed
-    ? t("analyse_incomplete", { failed, n: planned, err: lastErr })
-    : t("analyse_done", { found, n: planned });
+    ? t("analyse_incomplete", { failed, n: total, err: lastErr })
+    : t("analyse_done", { found, n: total })
+      + (already ? " " + t("analyse_dup", { n: already }) : "");
   alert(headline
         + (freed ? " " + t("footage_freed", { mb: freed.toFixed(0) })
                  : (isDebug() || failed ? " " + t("footage_kept") : ""))
