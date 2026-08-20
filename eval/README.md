@@ -89,3 +89,41 @@ defined rim**, rather than anything about where on the road the defect sits.
 The seed set is too small to settle this: 6 confirmed potholes, 4 confirmed
 negatives, and 5 frames nobody has reviewed. Growing it with openly licensed
 Indian street-level imagery is the highest-value work available here.
+
+## 20 Aug 2026: the repair-scar clause, ACCEPTED
+
+The first change to this prompt that measurement supported rather than killed.
+
+A real drive down M V Jayaram Road produced one detection on a street with at least five
+defects. Running the shipped prompt over ten frames from that drive explained why, and the
+reasons were unanimous: "no clearly defined pothole cavity visible", "worn ruts and uneven
+patched surface", "rough patches and worn pavement but no clear distinct pothole". That
+street has not got five holes in an intact road, it has lost its surface. The prompt said
+"road repair scars are NOT potholes", so the model was following instructions.
+
+Two candidates were measured and rejected before this one.
+
+  Widening the definition to any failed carriageway: real drive 2/11 to 5/11, but it
+  accepted all four images labelled intact, including two that are plainly clean asphalt.
+
+  Cropping to the lower 55% of the frame, on the theory that a portrait mount wastes half
+  the image on sky: eval positives fell from 8/8 to 4/8, because the owner-verified
+  positives are close-range shots where the damage sits higher in the frame.
+
+What shipped changes one clause: a level, intact patch is still not a pothole, but a patch
+that has itself broken up is reportable damage. Three runs per image:
+
+                            real drive     known potholes    labelled intact, rejected
+  shipped                   5/33  (15%)    24/24 (100%)      5/12 (42%)
+  repair clause softened    9/33  (27%)    24/24 (100%)      4/12 (33%)
+
+The apparent cost on the last column is not real. Per image, t049s and t061s are accepted
+4 of 4 by the OLD prompt as well, with specific descriptions, so they are not a regression
+from this change. Both were labelled not_pothole by the assistant and never reviewed, and
+on inspection the detector looks right, so they are now marked disputed and excluded rather
+than counted against it. The only movement attributable to this change is t013s going 1/4
+to 2/4, which is inside the noise of four runs.
+
+What this does not fix: the detector still describes this damage as a pothole, and a street
+that has lost its surface is really a different complaint. The letter wording has not been
+changed to match, and should be, once someone decides what that complaint says.

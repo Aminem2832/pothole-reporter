@@ -91,7 +91,9 @@
 Decide whether the photo clearly shows a pothole on a road surface.
 - Classify size like pizzas: small (below 30 cm wide), medium (30 to 60 cm), large (above 60 cm or a cluster).
 - Beware of speed breakers: from a distance they can look like potholes. Set looks_like_speed_breaker accordingly, and if it is actually a speed breaker, is_pothole must be false.
-- Shadows, manhole covers, wet patches, and road repair scars are NOT potholes.
+- Shadows, manhole covers, wet patches, and a patch that is level and intact are NOT
+  potholes. A patch or repair that has itself broken up, leaving a depression or loose
+  aggregate in the driving line, IS reportable damage.
 - confidence is your 0 to 1 confidence in the is_pothole verdict. Be conservative: this triggers a government complaint.
 - description: one or two factual sentences usable in a complaint (surface condition, position on the road, hazard posed).
 - Some images are dashcam frames from a moving vehicle: moderate motion blur, low light, or a boosted-brightness look are normal; judge the road surface itself.`;
