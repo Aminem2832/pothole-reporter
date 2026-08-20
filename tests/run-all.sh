@@ -26,7 +26,7 @@ pkill -f "http.server 8765" >/dev/null 2>&1
 start_server || { echo "could not start the static server"; exit 1; }
 trap 'pkill -f "http.server 8765" >/dev/null 2>&1' EXIT
 
-TESTS="unit_test letter_test tender_determinism_test storage_commit_test stalled_body_test
+TESTS="unit_test capture_cadence_test letter_test tender_determinism_test storage_commit_test stalled_body_test
        ui_text_test routing_test nh_test gis_failure_test footage_test"
 
 fail=0
@@ -36,6 +36,19 @@ for t in $TESTS; do
   if out=$($PY "tests/$t.py" 2>&1); then
     echo "${out##*$'\n'}"
   else
+    # The tests that query Karnataka's GIS live share one flaky government service, and it
+    # rate-limits when the whole suite runs back to back. A single retry tells a real
+    # regression apart from the state's server having a moment.
+    case "$t" in
+      routing_test|nh_test|gis_failure_test)
+        sleep 5
+        ensure_server
+        if out=$($PY "tests/$t.py" 2>&1); then
+          echo "${out##*$'\n'} (passed on retry)"
+          continue
+        fi
+        ;;
+    esac
     echo "FAIL"; echo "$out" | tail -12 | sed 's/^/    /'; fail=1
   fi
 done

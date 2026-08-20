@@ -786,7 +786,22 @@ async function sendReport(r) {
 // ---------- Drive Mode ----------
 const FRAME_INTERVAL_MS = 400;   // the loop polls often; distance below decides when to shoot
 const MIN_MOVE_METERS = 8;
-const STILL_CAPTURE_MS = 8000; // capture at least this often even when not moving
+// The fallback cadence when the movement gate says we are stationary. It used to be 8s,
+// which at 30 km/h is 66 m of road nobody looked at. A real drive down a street with five
+// potholes produced five frames in 45 seconds, every one of them from this fallback,
+// because the phone kept redelivering a fix that did not move. When the app is unsure
+// whether it is moving, the cheap mistake is to take a photo, not to skip 66 m.
+// Sized so the degraded case still approximates the intended 8 m spacing: about
+// 5.5 m/s is ordinary city speed, so 1.5 s is roughly 8 m of road per frame.
+const STILL_CAPTURE_MS = 1500;
+// When the phone positively reports it is not moving, and its fix is precise enough to
+// be believed, there is no reason to keep photographing the same spot. Only that case
+// gets the slow cadence; anything less certain gets STILL_CAPTURE_MS.
+const PARKED_CAPTURE_MS = 8000;
+// Beyond this, a fix is too coarse for an 8 m displacement test to mean anything.
+const GPS_COARSE_M = 30;
+// Reported ground speed above this counts as moving, whatever the coordinates say.
+const MOVING_MS = 1.0;
 const GPS_MAX_AGE_MS = 10000; // a fix older than this is stale: pause rather than mistag
 // Measured against the API, two saturated rounds per setting: 4 in flight gives 1.04
 // frames/s, 6 gives 1.63, 8 gives 1.89, and it collapses past that (12 gives 1.15, 16
@@ -834,7 +849,13 @@ async function startDrive() {
     (p) => {
       if (!drive) return;
       drive.pos = { lat: p.coords.latitude, lng: p.coords.longitude };
-      drive.posAt = Date.now();
+      // Staleness is the age of the FIX, not of its delivery. A phone will hand back the
+      // same cached fix over and over, and stamping arrival time made it look perpetually
+      // fresh while the car drove away from it.
+      drive.posAt = p.timestamp || Date.now();
+      drive.posAccuracy = typeof p.coords.accuracy === "number" ? p.coords.accuracy : null;
+      drive.posSpeed = typeof p.coords.speed === "number" && !Number.isNaN(p.coords.speed)
+        ? p.coords.speed : null;
       (drive.gpsTrack || (drive.gpsTrack = [])).push(
         [Math.round((Date.now() - drive.startedAt) / 100) / 10, +p.coords.latitude.toFixed(6), +p.coords.longitude.toFixed(6)]);
     },
@@ -891,7 +912,21 @@ async function driveTick() {
   if (drive.inFlight >= MAX_IN_FLIGHT) { updateHud(); return; }
   const pos = { ...drive.pos };
   const sinceLastCapture = Date.now() - (drive.lastCapAt || 0);
-  if (drive.lastCapPos && distMeters(drive.lastCapPos, pos) < MIN_MOVE_METERS && sinceLastCapture < STILL_CAPTURE_MS) {
+  // Only hold when we actually know we are still. The phone reporting ground speed is the
+  // strongest signal it has, and a fix too coarse to resolve 8 m cannot say we have not
+  // moved 8 m. Either way the fallback still fires, so an unsure app keeps looking at the
+  // road rather than deciding it has parked.
+  // Stillness needs positive evidence. A phone that reports no speed at all, or a fix too
+  // coarse to resolve 8 m, cannot tell a parked car from a moving one whose coordinates
+  // are not keeping up, and that second case is exactly what happened on a real drive:
+  // fresh fixes, unchanged coordinates, and the app deciding it had parked. Absent
+  // evidence, keep looking at the road.
+  const coarse = drive.posAccuracy === null || drive.posAccuracy > GPS_COARSE_M;
+  const knownStill = drive.posSpeed !== null && drive.posSpeed <= MOVING_MS && !coarse;
+  const stillMs = knownStill ? PARKED_CAPTURE_MS : STILL_CAPTURE_MS;
+  if (drive.lastCapPos
+      && (knownStill ? distMeters(drive.lastCapPos, pos) < MIN_MOVE_METERS : true)
+      && sinceLastCapture < stillMs) {
     updateHud(t("holding", { checked: drive.tally.checked, found: drive.tally.found }));
     return;
   }
