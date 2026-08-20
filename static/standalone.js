@@ -524,6 +524,23 @@ Decide whether the photo clearly shows a pothole on a road surface.
     "karnataka", "india", "ward", "city", "corporation", "south", "north", "east",
     "west", "central", "urban", "sector", "stage", "block", "phase"]);
 
+  // Award records carry no defect liability period, so it is inferred from how recent the
+  // tender is and must stay worded as a possibility. Pulled out of matchTender so it can be
+  // tested directly: it decides a sentence in a letter naming a private company.
+  function warrantyFor(published, now) {
+    const dm = /^(\d{2})-(\d{2})-(\d{4})$/.exec(String(published || "").trim());
+    if (!dm) return { warranty: "recorded for this stretch", warranty_code: "record" };
+    const when = Date.UTC(+dm[3], +dm[2] - 1, +dm[1]);
+    if (!isFinite(when) || +dm[2] < 1 || +dm[2] > 12 || +dm[1] < 1 || +dm[1] > 31) {
+      return { warranty: "recorded for this stretch", warranty_code: "record" };
+    }
+    const ageYears = ((now === undefined ? Date.now() : now) - when) / (365.25 * 24 * 3600 * 1000);
+    if (ageYears < 0) return { warranty: "recorded for this stretch", warranty_code: "record" };
+    if (ageYears <= 1) return { warranty: "within the defect liability period", warranty_code: "dlp" };
+    if (ageYears <= 3) return { warranty: "within the maintenance period", warranty_code: "maint" };
+    return { warranty: "recorded for this stretch", warranty_code: "record" };
+  }
+
   async function matchTender(address, lgd) {
     if (!address || !S.key || !lgd) return null;
     const tokens = new Set();
@@ -603,14 +620,7 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     } catch (e) { return null; }
     if (!m || m.match_index === null || m.match_index < 0 || m.match_index >= candidates.length || m.confidence < 0.6) return null;
     const t = candidates[m.match_index];
-    let warranty = "recorded for this stretch";
-    let warranty_code = "record";
-    const dm = /^(\d{2})-(\d{2})-(\d{4})/.exec(t.d);
-    if (dm) {
-      const ageYears = (Date.now() - new Date(`${dm[3]}-${dm[2]}-${dm[1]}`).getTime()) / (365.25 * 24 * 3600 * 1000);
-      if (ageYears <= 1) { warranty = "within the defect liability period"; warranty_code = "dlp"; }
-      else if (ageYears <= 3) { warranty = "within the maintenance period"; warranty_code = "maint"; }
-    }
+    const { warranty, warranty_code } = warrantyFor(t.d);
     // Records without a winner are common in this dataset. Naming nobody is correct;
     // a placeholder sentence read as a person's name in the Kannada draft.
     const contractor = t.c || null;
@@ -1124,7 +1134,12 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
     } catch (e) {}
   }
 
-  window.StandaloneAPI = { handle, prewarm };
+  // Pure helpers, exposed for tests. These are references, not copies: a test exercises
+  // exactly the code that runs in production. Nothing here holds state or a secret.
+  const __pure = { inCoverage, peekVerdict, peekReject, rejectedVerdict, distMeters,
+                   draftEmail, dataUrlToBlob, photoToBase64, toDict, listDict, warrantyFor };
+
+  window.StandaloneAPI = { __pure, handle, prewarm };
 
   // First run: open settings if no key yet (after the main script wires the UI).
   window.addEventListener("load", () => {
