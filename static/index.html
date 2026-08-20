@@ -1171,6 +1171,22 @@ function gpsAt(track, seconds) {
 // Clips are walked one at a time. Byte-joining separate MP4 files does not make one
 // longer video: only the first is parsed, so a naive concatenation silently analyses
 // the first few seconds of a drive and reports success.
+// A WebM produced by MediaRecorder carries no duration, so the element reports Infinity.
+// Seeking far past the end makes the browser scan to the last frame and report the real
+// length. Without this every WebM clip looks unreadable and the drive appears to have no
+// footage at all.
+function resolveDuration(v) {
+  return new Promise((res) => {
+    let settled = false;
+    const done = (d) => { if (!settled) { settled = true; v.ontimeupdate = null; res(d); } };
+    v.ontimeupdate = () => {
+      if (isFinite(v.duration) && v.duration > 0) { const d = v.duration; v.currentTime = 0; done(d); }
+    };
+    setTimeout(() => done(NaN), 10000);
+    try { v.currentTime = 1e7; } catch (e) { done(NaN); }
+  });
+}
+
 async function analyseFootage(driveId, driveRec) {
   let footage;
   try { footage = await api(`/api/footage/${encodeURIComponent(driveId)}/blobs`); }
@@ -1206,11 +1222,19 @@ async function analyseFootage(driveId, driveRec) {
     const meta = await new Promise((res) => {
       v.onloadedmetadata = () => res({ dur: v.duration });
       v.onerror = () => res({ error: true });
+      setTimeout(() => res({ error: true }), 15000);
     });
-    if (meta.error || !isFinite(meta.dur) || meta.dur <= 0) { URL.revokeObjectURL(url); continue; }
+    if (meta.error) { URL.revokeObjectURL(url); continue; }
+    // MediaRecorder writes WebM with no duration in the header, so the element reports
+    // Infinity until something forces it to scan. Skipping those clips meant that on any
+    // device whose WebView cannot record MP4, and the Android emulator is one, every
+    // recording was stored and then declared missing. Seeking past the end resolves it.
+    let dur = meta.dur;
+    if (!isFinite(dur) || dur <= 0) dur = await resolveDuration(v);
+    if (!isFinite(dur) || dur <= 0) { URL.revokeObjectURL(url); continue; }
     const times = [];
-    for (let at = Math.min(0.2, meta.dur / 2); at < meta.dur; at += VOD_STEP_S) times.push(at);
-    clips.push({ url, dur: meta.dur, times, blob: clip });
+    for (let at = Math.min(0.2, dur / 2); at < dur; at += VOD_STEP_S) times.push(at);
+    clips.push({ url, dur, times, blob: clip });
     v.src = ""; // the pool opens its own elements; this one was only for the duration
   }
   const total = clips.reduce((n, c) => n + c.times.length, 0);

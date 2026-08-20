@@ -77,6 +77,15 @@ else:
     if totals[0] < 1:
         fails.append("total was zero")
 
+# A clip whose duration the element reports as Infinity must still be analysed. Chromium
+# usually reports a finite duration for its own recording, so this is a source-level guard
+# against the check that silently skipped every WebM clip on devices that cannot record MP4.
+src = (ROOT / "static/index.html").read_text(encoding="utf-8")
+if "resolveDuration" not in src:
+    fails.append("resolveDuration is gone: clips with Infinity duration will be skipped again")
+if "if (meta.error || !isFinite(meta.dur)" in src:
+    fails.append("the clip loop skips on a non-finite duration again, which breaks WebM recordings")
+
 if fails:
     print("\nFAIL"); [print("  -", f) for f in fails]; sys.exit(1)
 print("\nFOOTAGE TEST PASS")
