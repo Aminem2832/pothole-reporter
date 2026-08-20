@@ -66,7 +66,7 @@
     if (_bodies) return _bodies;
     try {
       const res = await fetchWithTimeout("karnataka-bodies.json", {}, 15000);
-      const loaded = (await res.json()).bodies;
+      const loaded = (await readJson(res)).bodies;
       if (loaded && Object.keys(loaded).length) { _bodies = loaded; return _bodies; }
     } catch (e) { /* fall through and retry on the next call */ }
     return {};
@@ -134,19 +134,45 @@ Decide whether the photo clearly shows a pothole on a road surface.
   // leaves the UI on a spinner with no end, and a drive quietly stops forever.
   const REQUEST_TIMEOUT_MS = 30000;
 
+  // The timeout used to be cleared the moment the headers arrived, so it only ever covered
+  // the handshake. A response that sent headers and then stalled was never aborted, and a
+  // drive wedged with every slot occupied while the HUD went on reporting it healthy.
+  //
+  // The timer now stays armed until the body is finished. A streaming caller re-arms it on
+  // every chunk that carries data, so a slow but live response is fine and a silent one is
+  // not, and disarms it when the body is done.
   async function fetchWithTimeout(url, init, ms = REQUEST_TIMEOUT_MS) {
     const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = setTimeout(() => ctl && ctl.abort(), ms);
+    let timer = setTimeout(() => ctl && ctl.abort(), ms);
+    const disarm = () => { clearTimeout(timer); timer = null; };
+    const rearm = (delay) => {
+      if (timer === null) return;             // already finished
+      clearTimeout(timer);
+      timer = setTimeout(() => ctl && ctl.abort(), delay === undefined ? ms : delay);
+    };
+    let res;
     try {
-      return await fetch(url, ctl ? { ...init, signal: ctl.signal } : init);
+      res = await fetch(url, ctl ? { ...init, signal: ctl.signal } : init);
     } catch (e) {
+      disarm();
       if (e && (e.name === "AbortError" || /abort/i.test(e.message || ""))) {
-        throw new Error("The network did not respond. Check the connection and try again.");
+        const to = new Error("The network did not respond. Check the connection and try again.");
+        to.timeout = true;
+        throw to;
       }
       // Platform network errors read like `Unable to resolve host "api.openai.com"`.
       // Nobody watching a demo should be shown that.
       throw new Error("Could not reach OpenAI. Check the connection and try again.");
-    } finally { clearTimeout(timer); }
+    }
+    res.__disarm = disarm;
+    res.__rearm = rearm;
+    return res;
+  }
+
+  // Reading a body must always disarm the watchdog, including when it throws.
+  async function readJson(res) {
+    try { return await res.json(); }
+    finally { if (res.__disarm) res.__disarm(); }
   }
 
   // Never surface a provider's response body: it is JSON, it is long, and on a
@@ -175,7 +201,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
       method: "POST", headers: authHeaders(), body: JSON.stringify(withSpeedDefaults(body)),
     });
     if (!res.ok) throw await statusError(res);
-    const data = await res.json();
+    const data = await readJson(res);
     const msg = (data.output || []).find((o) => o.type === "message");
     const text = msg && msg.content && msg.content.find((c) => c.type === "output_text");
     if (!text || !text.text) throw new Error("Empty model response.");
@@ -254,14 +280,19 @@ Decide whether the photo clearly shows a pothole on a road surface.
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
+        // A chunk that carries data proves the response is alive, so the watchdog resets.
+        // A response that goes silent mid-body is aborted rather than hanging the drive.
+        if (res.__rearm) res.__rearm();
         drainSSE(dec.decode(value, { stream: true }), state, onEarly, stopWhenRejected);
         if (state.stop) { try { await reader.cancel(); } catch (e) {} break; }
       }
     } else {
       // Buffered transports (the native HTTP bridge) hand back the whole SSE body at once,
       // so there is nothing left to stop early: the tokens were already generated.
-      drainSSE(await res.text(), state, onEarly, stopWhenRejected);
+      try { drainSSE(await res.text(), state, onEarly, stopWhenRejected); }
+      finally { if (res.__disarm) res.__disarm(); }
     }
+    if (res.__disarm) res.__disarm();
     if (state.stop) return rejectedVerdict(state.text);
     drainSSE("\n", state, onEarly, stopWhenRejected);
     if (state.stop) return rejectedVerdict(state.text);
@@ -308,6 +339,18 @@ Decide whether the photo clearly shows a pothole on a road surface.
     } catch (e) {
       // A bad key or a rate limit fails identically unstreamed, so surface those.
       if (e && e.fatal) throw e;
+      // A timeout says nothing about whether the server can stream, it says the network
+      // stalled. Retrying it unstreamed stalls again, so a single stalled frame cost two
+      // full timeouts, and latching streamBroken made every later frame pay for streaming
+      // it would no longer use. Surface it and leave streaming alone.
+      if (e && (e.timeout || e.name === "AbortError")) {
+        // The abort can surface from the body reader rather than from fetch, where it
+        // arrives as a bare "Aborted". Nobody watching a demo should be shown that.
+        if (e.timeout) throw e;
+        const to = new Error("The network did not respond. Check the connection and try again.");
+        to.timeout = true;
+        throw to;
+      }
       // Anything else (a server that refuses stream:true, a transport that cannot
       // stream, a parse failure) must not cost us the verdict. Remember it, so the
       // wasted round trip is paid once per launch and not on every photo.
@@ -339,7 +382,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&zoom=17&addressdetails=1`,
         {}, 12000);
       if (!res.ok) return null;
-      const d = await res.json();
+      const d = await readJson(res);
       const a = d.address || {};
       const parts = [
         a.road || a.pedestrian || a.residential || a.footway,
@@ -415,7 +458,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
     // failed highway check there refused every report in the rest of the state and
     // called it "outside Karnataka". An unanswered road-class check is its own outcome.
     if (!nh || !nh.ok) return { kind: "road_class_unknown" };
-    const h = featuresOf(await nh.json());
+    const h = featuresOf(await readJson(nh));
     // A missing features array means the service did not answer the question. Reading it
     // as "no highway here" is the same failure as not asking at all.
     if (h === null) return { kind: "road_class_unknown" };
@@ -423,7 +466,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
       const road = ((h[0].attributes || {}).Name || "").trim();
       return { kind: "national_highway", name: road || null };
     }
-    const t = featuresOf(await town.json());
+    const t = featuresOf(await readJson(town));
     if (t === null) return { kind: "road_class_unknown" };
     if (t.length) {
       const a = t[0].attributes || {};
@@ -439,7 +482,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
     // simply a lie. Retried for the same reason the highway check is.
     const gp = await retryQuery(KGIS_GP_URL, lat, lng, "KGISGPName");
     if (!gp) return { kind: "road_class_unknown" };
-    const g = featuresOf(await gp.json());
+    const g = featuresOf(await readJson(gp));
     if (g === null) return { kind: "road_class_unknown" };
     const name = g.length && (g[0].attributes || {}).KGISGPName;
     if (name && String(name).trim()) return { kind: "rural", name: String(name).trim() };
@@ -507,7 +550,7 @@ Decide whether the photo clearly shows a pothole on a road surface.
     if (_tenders) return _tenders;
     try {
       const res = await fetchWithTimeout("tenders.json", {}, 30000);
-      const loaded = await res.json();
+      const loaded = await readJson(res);
       if (Array.isArray(loaded) && loaded.length) { _tenders = loaded; return _tenders; }
     } catch (e) { /* fall through and retry on the next call */ }
     return [];
@@ -566,54 +609,83 @@ Decide whether the photo clearly shows a pothole on a road surface.
     return { warranty: "recorded for this stretch", warranty_code: "record" };
   }
 
-  async function matchTender(address, lgd) {
-    if (!address || !S.key || !lgd) return null;
+  // The ranked candidate list, split out from matchTender so it can be tested on its own.
+  // It is entirely local and must be deterministic: the same address and body must give
+  // the same list in the same order every time, or the app cannot justify the contract it
+  // eventually prints in a letter naming a real company.
+  async function shortlistFor(address, lgd) {
+    if (!address || !lgd) return [];
     const tokens = new Set();
     for (const part of address.split(",").slice(0, 4)) {
       for (const w of part.trim().toLowerCase().replace(/[()]/g, " ").split(/\s+/)) {
         if (w.length > 2 && !TENDER_STOP.has(w)) tokens.add(w);
       }
     }
-    if (!tokens.size) return null;
-    // Only this body's own contracts are candidates. That is what makes naming one safe:
-    // the officer receiving the letter awarded the work. It also rules out the failure
-    // this matcher used to be vulnerable to, a contract from a different town whose road
-    // name happened to match, and it rules out state PWD, panchayat and irrigation
-    // contracts, which a municipal officer has no standing over.
+    if (!tokens.size) return [];
     const pool = await tendersFor(lgd);
-    if (!pool.length) return null;
-    const hays = pool.map((t) => (t.t + " " + t.loc).toLowerCase());
+    if (!pool.length) return [];
 
-    // Weight each word by how rare it is inside this body's own contracts. Counting
-    // matched words equally does not work here: the town's name appears in most of its
-    // own work titles, so "Vidyanagar, Hubli" scored a ward-48 Vidyanagar contract the
-    // same as eighty unrelated ones that merely said Hubli, and the right one was cut by
-    // the shortlist. The locality is the word that identifies a road; the town name is
-    // noise once the pool is already that town.
+    // Scored on the work description alone. The location field is the body's own name,
+    // identical in every one of its rows, so it cannot tell one of the body's roads from
+    // another: including it only added the town's name to every candidate equally.
+    const hays = pool.map((t) => (t.t || "").toLowerCase());
+
+    // The body's own name is not evidence about which of its roads this is, and it turns
+    // up in some work titles as well as in every location, so counting alone will not
+    // remove it. Krishnamurtipuram, Mysuru matched a Mysuru water-supply contract purely
+    // on the word Mysuru.
+    const bodyWords = new Set();
+    for (const w of (pool[0].loc || "").toLowerCase().split(/[^a-z]+/)) {
+      if (w.length > 2) bodyWords.add(w);
+    }
+    for (const w of bodyWords) tokens.delete(w);
+    if (!tokens.size) return [];
+
     const idf = new Map();
     for (const tok of tokens) {
       let df = 0;
       for (const hay of hays) if (hay.includes(tok)) df++;
-      // A word in none of this body's contracts is no evidence, and a word in most of
-      // them (the town's own name) does not distinguish one road from another. Only
-      // words in between say anything about WHICH stretch this is.
-      if (df > 0 && df <= pool.length * 0.5) {
-        idf.set(tok, Math.log((pool.length + 1) / (df + 1)));
-      }
+      // A word in none of this body's contracts is no evidence, and a word in every one
+      // of them cannot distinguish one road from another. The "more than half" cut only
+      // means something once there are enough contracts to count: a town with three had
+      // every matching word exceed half, so it could never match anything at all.
+      if (df === 0) continue;
+      if (pool.length > 1 && df === pool.length) continue;
+      if (pool.length >= 8 && df > pool.length * 0.5) continue;
+      idf.set(tok, Math.log((pool.length + 1) / (df + 0.5)));
     }
-    // Nothing in the address narrows the pool below "somewhere in this town". Naming a
-    // contract on that basis is a guess, and this letter goes to a public official with
-    // a private company named in it, so it names nothing instead.
-    if (!idf.size) return null;
+    if (!idf.size) return [];
+
     const scored = [];
     for (let i = 0; i < pool.length; i++) {
       let score = 0;
       for (const [tok, w] of idf) if (hays[i].includes(tok)) score += w;
-      if (score > 0) scored.push([score, pool[i]]);
+      if (score > 0) scored.push({ score, t: pool[i] });
     }
-    scored.sort((a, b) => b[0] - a[0]);
-    const candidates = scored.slice(0, 25).map((x) => x[1]);
-    if (!candidates.length) return null;
+    // Deterministic all the way down. Scores tie often, because a locality word may be the
+    // only thing that matched and every ward contract for that locality then scores the
+    // same: measured, all ten HSR Layout candidates tied at exactly 5.756. Without an
+    // explicit order the list arrived differently on different runs and the same pothole
+    // was reported under different contracts. Ties break by most recent first, since a
+    // newer award is likelier to still carry an obligation, then by tender number.
+    const stamp = (t) => {
+      const m = /^(\d{2})-(\d{2})-(\d{4})$/.exec(String(t.d || "").trim());
+      return m ? Date.UTC(+m[3], +m[2] - 1, +m[1]) : 0;
+    };
+    scored.sort((a, b) =>
+      (b.score - a.score) || (stamp(b.t) - stamp(a.t)) || String(a.t.tn).localeCompare(String(b.t.tn)));
+    return scored.slice(0, 25).map((x) => ({ score: x.score, tn: x.t.tn, t: x.t }));
+  }
+
+  async function matchTender(address, lgd) {
+    if (!address || !S.key || !lgd) return null;
+    // Only this body's own contracts are candidates. That is what makes naming one safe:
+    // the officer receiving the letter awarded the work. It also rules out a contract from
+    // a different town whose road name happened to match, and state PWD, panchayat and
+    // irrigation contracts, which a municipal officer has no standing over.
+    const ranked = await shortlistFor(address, lgd);
+    if (!ranked.length) return null;
+    const candidates = ranked.map((x) => x.t);
     const listing = candidates.map((t, i) =>
       `${i}: ${t.t.slice(0, 150)} | ${t.loc} | contractor: ${t.c || "not named"} | published: ${t.d}`).join("\n");
     const prompt = `You match a pothole's location to road-work contracts awarded by the
@@ -695,7 +767,7 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
           `Dear ${officerName || "Sir or Madam"},`,
           "I would like to report a pothole that needs repair.",
           `${locLines}\nApproximate size: ${size}`,
-          "PFA image. This pothole poses a danger to two wheeler riders and other road users. I request the city corporation to inspect and repair it at the earliest, and to route it to the contractor responsible if this road section is still under a maintenance warranty.",
+          "PFA image. This pothole poses a danger to two wheeler riders and other road users. I request your office to inspect and repair it at the earliest, and to route it to the contractor responsible if this road section is still under a maintenance warranty.",
         ];
 
     if (tender) {
@@ -708,14 +780,14 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
       // date, and this letter names a real company to a government officer.
       if (kn) {
         paras.push(`ಸಾರ್ವಜನಿಕ ಖರೀದಿ ದಾಖಲೆಗಳ ಪ್ರಕಾರ ಈ ರಸ್ತೆ ಭಾಗ ಟೆಂಡರ್ ${tender.tender_number} ("${title}") ಅಡಿಯಲ್ಲಿ ಬರುವ ಸಾಧ್ಯತೆ ಇದೆ. ಇದು ${tender.published} ರಂದು ಪ್ರಕಟವಾಗಿದೆ${tender.contractor ? `, ಗೆದ್ದ ಬಿಡ್‌ದಾರರಾಗಿ ${tender.contractor} ಎಂದು ದಾಖಲಾಗಿದೆ` : ", ಗೆದ್ದ ಬಿಡ್‌ದಾರರ ಹೆಸರು ದಾಖಲೆಯಲ್ಲಿ ಇಲ್ಲ"}, ಮತ್ತು ${warrantyKn}.`);
-        paras.push("ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅಥವಾ ನಿರ್ವಹಣಾ ಅವಧಿ ಜಾರಿಯಲ್ಲಿದ್ದರೆ, ಪಾಲಿಕೆಗೆ ಹೆಚ್ಚುವರಿ ವೆಚ್ಚವಿಲ್ಲದೆ ಗುತ್ತಿಗೆದಾರರಿಂದಲೇ ದುರಸ್ತಿ ಮಾಡಿಸಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ. ಇದು ಸಂಭಾವ್ಯ ದಾಖಲೆ ಹೊಂದಾಣಿಕೆ; ದಯವಿಟ್ಟು ಟೆಂಡರ್ ದಾಖಲೆಗಳೊಂದಿಗೆ ಪರಿಶೀಲಿಸಿ.");
+        paras.push("ದೋಷ ಹೊಣೆಗಾರಿಕೆ ಅಥವಾ ನಿರ್ವಹಣಾ ಅವಧಿ ಜಾರಿಯಲ್ಲಿದ್ದರೆ, ಸಂಸ್ಥೆಗೆ ಹೆಚ್ಚುವರಿ ವೆಚ್ಚವಿಲ್ಲದೆ ಗುತ್ತಿಗೆದಾರರಿಂದಲೇ ದುರಸ್ತಿ ಮಾಡಿಸಬೇಕೆಂದು ವಿನಂತಿಸುತ್ತೇನೆ. ಇದು ಸಂಭಾವ್ಯ ದಾಖಲೆ ಹೊಂದಾಣಿಕೆ; ದಯವಿಟ್ಟು ಟೆಂಡರ್ ದಾಖಲೆಗಳೊಂದಿಗೆ ಪರಿಶೀಲಿಸಿ.");
       } else {
         paras.push(`Public procurement records indicate this road stretch probably falls under tender ${tender.tender_number} ("${title}"), published on ${tender.published}${tender.contractor ? `, with ${tender.contractor} recorded as the winning bidder` : ", with no winning bidder recorded"}, and it may still be ${tender.warranty}.`);
         paras.push("If the defect liability or maintenance period is in force, I request that the repair be carried out by the contractor at no additional cost to the corporation. This is a probable record match; kindly verify against the tender documents.");
       }
     }
 
-    paras.push(kn ? "ನಗರ ಸೇವೆಗೆ ಧನ್ಯವಾದಗಳು." : "Thank you for your service to the city.");
+    paras.push(kn ? "ನಿಮ್ಮ ಸೇವೆಗೆ ಧನ್ಯವಾದಗಳು." : "Thank you for your service.");
     paras.push(kn ? `ವಂದನೆಗಳು,\n${S.name}` : `Regards,\n${S.name}`);
     return [subject, paras.join("\n\n")];
   }
@@ -1187,7 +1259,8 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
   // Pure helpers, exposed for tests. These are references, not copies: a test exercises
   // exactly the code that runs in production. Nothing here holds state or a secret.
   const __pure = { inCoverage, peekVerdict, peekReject, rejectedVerdict, distMeters,
-                   draftEmail, dataUrlToBlob, photoToBase64, toDict, listDict, warrantyFor };
+                   draftEmail, dataUrlToBlob, photoToBase64, toDict, listDict, warrantyFor,
+                   shortlistFor, matchTenderFor: matchTender };
 
   window.StandaloneAPI = { __pure, handle, prewarm };
 

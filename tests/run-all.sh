@@ -5,18 +5,38 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 PY=.venv/bin/python3
 
-pkill -f "http.server 8765" >/dev/null 2>&1; sleep 1
-(cd android-app/www && nohup python3 -m http.server 8765 >/tmp/pothole-srv.log 2>&1 &)
-sleep 2
+start_server() {
+  (cd android-app/www && nohup python3 -m http.server 8765 >/tmp/pothole-srv.log 2>&1 &)
+  for _ in $(seq 1 20); do
+    curl -s -o /dev/null http://localhost:8765/index.html && return 0
+    sleep 0.5
+  done
+  return 1
+}
+# The suite launches a browser per test and the little server has died mid-run before,
+# which reads as a test failure and is not one. Check it before each test, restart if gone.
+ensure_server() {
+  curl -s -o /dev/null --max-time 3 http://localhost:8765/index.html && return 0
+  echo "    (restarting the static server)"
+  pkill -f "http.server 8765" >/dev/null 2>&1
+  start_server
+}
+
+pkill -f "http.server 8765" >/dev/null 2>&1
+start_server || { echo "could not start the static server"; exit 1; }
 trap 'pkill -f "http.server 8765" >/dev/null 2>&1' EXIT
 
+TESTS="unit_test letter_test tender_determinism_test storage_commit_test stalled_body_test
+       ui_text_test routing_test nh_test gis_failure_test footage_test"
+
 fail=0
-for t in unit_test storage_commit_test ui_text_test routing_test nh_test gis_failure_test footage_test; do
-  printf "%-18s " "$t"
+for t in $TESTS; do
+  ensure_server || { echo "$t SKIPPED, no server"; fail=1; continue; }
+  printf "%-24s " "$t"
   if out=$($PY "tests/$t.py" 2>&1); then
     echo "${out##*$'\n'}"
   else
-    echo "FAIL"; echo "$out" | sed 's/^/    /'; fail=1
+    echo "FAIL"; echo "$out" | tail -12 | sed 's/^/    /'; fail=1
   fi
 done
 echo
