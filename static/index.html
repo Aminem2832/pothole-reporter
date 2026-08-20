@@ -445,6 +445,40 @@ async function loadHealth() {
   } catch (e) {}
 }
 
+// Shared so cards inserted when a drive is expanded behave exactly like ones rendered
+// with the list. Reads the item set it was given rather than the whole history.
+// Thumbnails as object URLs rather than base64 inside the HTML. A data URL is about 88 KB
+// of text, so a hundred of them made a nine megabyte innerHTML that had to be parsed and
+// decoded on every render. An object URL is about forty characters and the blob behind it
+// is decoded once.
+const thumbUrls = new Map();
+async function ensureThumbs(items) {
+  await Promise.all(items.map(async (r) => {
+    if (thumbUrls.has(r.id) || !r.photo_url) return;
+    try {
+      const blob = await (await fetch(r.photo_url)).blob();
+      thumbUrls.set(r.id, URL.createObjectURL(blob));
+    } catch (e) { thumbUrls.set(r.id, r.photo_url); }   // fall back to the data URL
+  }));
+}
+function releaseThumbs(keepIds) {
+  for (const [id, url] of thumbUrls) {
+    if (!keepIds.has(id)) {
+      if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+      thumbUrls.delete(id);
+    }
+  }
+}
+
+const groupsRef = [];
+function wireCards(root, items) {
+  for (const el of root.querySelectorAll("[data-id]")) {
+    if (el.dataset.wired) continue;
+    el.dataset.wired = "1";
+    el.onclick = () => openDetail(items.find((r) => r.id == el.dataset.id), items);
+  }
+}
+
 async function loadReports() {
   const reports = await api("/api/reports");
   loadReports.latest = reports;
@@ -452,7 +486,7 @@ async function loadReports() {
   if (!reports.length) { list.innerHTML = `<div class="empty">${t("no_reports")}</div>`; return; }
   const cardHtml = (r) => `
     <div class="card row" data-id="${r.id}" style="cursor:pointer">
-      <img class="thumb" src="${r.photo_url}" alt="">
+      <img class="thumb" src="${thumbUrls.get(r.id) || r.photo_url}" alt="" loading="lazy" decoding="async">
       <div style="min-width:0">
         <div>${chip(r.status)} ${r.size ? `<span class="chip" style="background:#26272c;color:#cfcfd4">${tSize(r.size)}</span>` : ""}</div>
         <div class="meta">${fmtDate(r.created_at)}${r.address ? " · " + r.address.split(",").slice(0, 2).join(", ") : ""}</div>
@@ -465,7 +499,8 @@ async function loadReports() {
   for (const d of drives) driveById[String(d.id)] = d;
   for (const f of footage) footageById[String(f.drive_id)] = f;
   // Group consecutive records from the same drive session under one header.
-  const groups = [];
+  const groups = groupsRef;
+  groups.length = 0;
   for (const r of reports) {
     const g = groups[groups.length - 1];
     if (r.drive_id && g && g.driveId === r.drive_id) g.items.push(r);
@@ -479,8 +514,13 @@ async function loadReports() {
     if (!g.driveId) continue;
     g.items.sort((a, b) => (FOUND.includes(b.status) ? 1 : 0) - (FOUND.includes(a.status) ? 1 : 0) || b.id - a.id);
   }
+  const willShow = groups.flatMap((g) =>
+    (!g.driveId || expandedDrives.has(String(g.driveId))) ? g.items : []);
+  await ensureThumbs(willShow);
+  releaseThumbs(new Set(reports.map((r) => r.id)));
   list.innerHTML = groups.map((g) => {
-    const cards = g.items.map(cardHtml).join("");
+    const cards = expandedDrives.has(String(g.driveId)) || !g.driveId
+      ? g.items.map(cardHtml).join("") : "";
     if (!g.driveId) return cards;
     const rec = driveById[String(g.driveId)];
     const stored = g.items.filter((x) => x.status === "draft" || x.status === "queued" || x.status === "sent").length;
@@ -503,13 +543,36 @@ async function loadReports() {
       </div>` : "";
     return `<div class="group-head ${open ? "open" : ""}" data-drive="${g.driveId}">
         <span class="caret">&#9656;</span><span class="meta" style="font-weight:600;color:#f2f2f4">${label}</span>
-      </div>` + (open ? footageRow + cards : "");
+      </div>` + footageRow
+      + `<div data-drivebody="${g.driveId}"${open ? ' data-filled="1"' : ' style="display:none"'}>`
+      + (open ? cards : "") + `</div>`;
   }).join("");
   for (const el of list.querySelectorAll("[data-drive]")) {
     el.onclick = () => {
       const id = el.dataset.drive;
-      if (expandedDrives.has(id)) expandedDrives.delete(id); else expandedDrives.add(id);
-      loadReports();
+      const body = list.querySelector(`[data-drivebody="${id}"]`);
+      if (!body) { // shape changed unexpectedly: fall back to a full render
+        if (expandedDrives.has(id)) expandedDrives.delete(id); else expandedDrives.add(id);
+        loadReports();
+        return;
+      }
+      const opening = !expandedDrives.has(id);
+      if (opening) {
+        expandedDrives.add(id);
+        const g = groups.find((x) => String(x.driveId) === id);
+        if (g && !body.dataset.filled) {
+          body.dataset.filled = "1";
+          ensureThumbs(g.items).then(() => {
+            body.innerHTML = g.items.map(cardHtml).join("");
+            wireCards(body, g.items);
+          });
+        }
+        body.style.display = "";
+      } else {
+        expandedDrives.delete(id);
+        body.style.display = "none";
+      }
+      el.classList.toggle("open", opening);
     };
   }
   for (const el of list.querySelectorAll("[data-analyse]")) {
@@ -525,9 +588,7 @@ async function loadReports() {
     };
   }
   const visible = groups.flatMap((g) => (!g.driveId || expandedDrives.has(String(g.driveId))) ? g.items : []);
-  for (const el of list.querySelectorAll("[data-id]")) {
-    el.onclick = () => openDetail(visible.find(r => r.id == el.dataset.id), visible);
-  }
+  wireCards(list, visible);
 }
 
 function getPosition() {

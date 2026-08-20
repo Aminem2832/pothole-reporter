@@ -364,11 +364,17 @@ Decide whether the photo clearly shows a pothole on a road surface.
   // One shared retry for the state GIS. Both callers fail closed on null, so a blip
   // costs a refusal the user can retry, never a wrong answer stated confidently.
   async function retryQuery(url, lat, lng, fields) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // Measured against the live service: it answers in 383 to 692 ms most of the time and
+    // occasionally takes over seven seconds, and one request in ten timed out at eight.
+    // Since this check fails closed, a slow government server was turning into a refusal
+    // for roughly one report in ten. Three attempts at twelve seconds costs nothing on the
+    // common path and makes that rare.
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const r = await fetchWithTimeout(kgisPoint(url, lat, lng, fields), {}, 8000);
+        const r = await fetchWithTimeout(kgisPoint(url, lat, lng, fields), {}, 12000);
         if (r.ok) return r;
       } catch (e) { /* fall through to the retry */ }
+      if (attempt < 2) await new Promise((res) => setTimeout(res, 300 * (attempt + 1)));
     }
     return null;
   }
