@@ -58,13 +58,18 @@
                            TP: "Chief Officer", NAC: "Chief Officer" };
 
   let _bodies = null;
+  // A failure is never cached. Caching one meant a single slow read of a file that ships
+  // inside the APK disabled routing for the rest of the session, and the app then refused
+  // every report as having no address for its body. Local reads were measured at over four
+  // seconds on a cold start, so this is not a remote possibility.
   async function bodies() {
     if (_bodies) return _bodies;
     try {
-      const res = await fetchWithTimeout("karnataka-bodies.json", {}, 8000);
-      _bodies = (await res.json()).bodies || {};
-    } catch (e) { _bodies = {}; }
-    return _bodies;
+      const res = await fetchWithTimeout("karnataka-bodies.json", {}, 15000);
+      const loaded = (await res.json()).bodies;
+      if (loaded && Object.keys(loaded).length) { _bodies = loaded; return _bodies; }
+    } catch (e) { /* fall through and retry on the next call */ }
+    return {};
   }
 
   // Bengaluru is still resolvable without the network: the five corporations are the
@@ -496,13 +501,16 @@ Decide whether the photo clearly shows a pothole on a road surface.
   let _tenders = null;
   // Parsed once per app session, which matters far more now the file is 9.5 MB: the
   // bundled data cannot change while the app runs, so one parse is correct.
+  // As with the registry: a failed read is not cached, or one slow start would silently
+  // stop every complaint naming a contract for the rest of the session.
   async function tenders() {
     if (_tenders) return _tenders;
     try {
-      const res = await fetchWithTimeout("tenders.json", {}, 20000);
-      _tenders = await res.json();
-    } catch (e) { _tenders = []; }
-    return _tenders;
+      const res = await fetchWithTimeout("tenders.json", {}, 30000);
+      const loaded = await res.json();
+      if (Array.isArray(loaded) && loaded.length) { _tenders = loaded; return _tenders; }
+    } catch (e) { /* fall through and retry on the next call */ }
+    return [];
   }
 
   // Contracts grouped by the body that awarded them, built once. Each municipal row
@@ -512,13 +520,17 @@ Decide whether the photo clearly shows a pothole on a road surface.
   let _byBody = null;
   async function tendersFor(lgd) {
     if (!_byBody) {
-      _byBody = new Map();
+      // Built from whatever tenders() returned, and only kept if that was a real load.
+      // Caching an index built from a failed read repeats the same fault one level up.
+      const index = new Map();
       for (const t of await tenders()) {
         if (!t.b) continue;
-        let list = _byBody.get(t.b);
-        if (!list) { list = []; _byBody.set(t.b, list); }
+        let list = index.get(t.b);
+        if (!list) { list = []; index.set(t.b, list); }
         list.push(t);
       }
+      if (!index.size) return [];
+      _byBody = index;
     }
     if (!lgd) return [];
     const own = _byBody.get(String(lgd)) || [];
@@ -732,13 +744,38 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
       req.onerror = () => reject(req.error);
     });
   }
+  // A write is not done when the request succeeds, it is done when the transaction
+  // commits. Chrome reports a full disk by aborting the transaction, and the request
+  // itself still succeeds, so resolving on req.onsuccess reported success for writes that
+  // rolled back: measured, 672 MB of footage reported stored and absent afterwards. A
+  // read has nothing to commit, so it still resolves on the request.
   function op(mode, fn, storeName = "reports") {
     return idb().then((d) => new Promise((resolve, reject) => {
-      const store = d.transaction(storeName, mode).objectStore(storeName);
-      const req = fn(store);
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+      const tx = d.transaction(storeName, mode);
+      const req = fn(tx.objectStore(storeName));
+      if (mode === "readonly") {
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+        return;
+      }
+      let value, failure = null;
+      req.onsuccess = () => { value = req.result; };
+      req.onerror = (e) => { failure = req.error; e.preventDefault(); };
+      tx.oncomplete = () => resolve(value);
+      const died = () => reject(storageError(failure || tx.error));
+      tx.onabort = died;
+      tx.onerror = died;
     }));
+  }
+
+  // A full device is the common cause and the only one the user can act on, so it says so
+  // rather than surfacing a DOMException name.
+  function storageError(err) {
+    const name = err && err.name;
+    if (name === "QuotaExceededError") {
+      return new Error("This phone is out of storage, so nothing more can be saved. Free some space, or delete old drives and their video from the app.");
+    }
+    return new Error((err && err.message) || "Could not save to this device's storage.");
   }
   const allReports = () => op("readonly", (s) => s.getAll());
   const getReport = (id) => op("readonly", (s) => s.get(Number(id)));

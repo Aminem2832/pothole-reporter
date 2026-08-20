@@ -216,6 +216,7 @@ const I18N = {
     zoom_hint: "Pinch to zoom · drag to pan · double tap to reset",
     rec_suffix: "· recording {mb} MB", rec_failed: "· not recording",
     net_trouble: "Connection trouble, still scanning ({n} frames waiting)",
+    capture_failing: "The camera is not returning frames. Stop and restart the drive.",
     camera_lost: "Camera paused (another app may be using it). Scanning resumes automatically.",
     drive_end_failed: "{n} frames could not be checked because of the connection.",
     footage_line: "Footage: {mb} MB · {segments} clips",
@@ -316,6 +317,7 @@ const I18N = {
     zoom_hint: "ಜೂಮ್‌ಗೆ ಪಿಂಚ್ · ಸರಿಸಲು ಎಳೆಯಿರಿ · ಮರುಹೊಂದಿಸಲು ಡಬಲ್ ಟ್ಯಾಪ್",
     rec_suffix: "· {mb} MB ರೆಕಾರ್ಡ್", rec_failed: "· ರೆಕಾರ್ಡ್ ಆಗುತ್ತಿಲ್ಲ",
     net_trouble: "ಸಂಪರ್ಕ ಸಮಸ್ಯೆ, ಇನ್ನೂ ಸ್ಕ್ಯಾನ್ ಆಗುತ್ತಿದೆ ({n} ಬಾಕಿ)",
+    capture_failing: "ಕ್ಯಾಮರಾವು ಫ್ರೇಮ್ ನೀಡುತ್ತಿಲ್ಲ. ಡ್ರೈವ್ ನಿಲ್ಲಿಸಿ ಮತ್ತೆ ಪ್ರಾರಂಭಿಸಿ.",
     camera_lost: "ಕ್ಯಾಮೆರಾ ವಿರಾಮದಲ್ಲಿದೆ (ಬೇರೆ ಆ್ಯಪ್ ಬಳಸುತ್ತಿರಬಹುದು). ತಾನಾಗಿಯೇ ಮುಂದುವರಿಯುತ್ತದೆ.",
     drive_end_failed: "ಸಂಪರ್ಕದ ಕಾರಣ {n} ಫ್ರೇಮ್‌ಗಳನ್ನು ಪರಿಶೀಲಿಸಲಾಗಲಿಲ್ಲ.",
     footage_line: "ವಿಡಿಯೋ: {mb} MB · {segments} ತುಣುಕುಗಳು",
@@ -917,12 +919,28 @@ async function driveTick() {
   if (drive.camBad >= 8) { updateHud(t("camera_lost")); return; }
   if (drive.camBad) return;                 // brief blip: skip this frame, stay quiet
   if (drive.stillBusy) return; // one still capture at a time; the camera track is not reentrant
-  drive.lastCapPos = pos;
-  drive.lastCapAt = Date.now();
   drive.stillBusy = true;
   let blob = null;
-  try { blob = await captureFrame(video); } finally { if (drive) drive.stillBusy = false; }
-  if (!drive || !blob) return;
+  try {
+    // A capture that never settles used to leave stillBusy true forever, and the finally
+    // of an unsettled promise never runs, so detection stopped for the rest of the drive
+    // while the HUD went on saying the drive was healthy. toBlob measures about 7 ms at
+    // 1080p, so this is roughly 400x headroom.
+    blob = await withTimeout(captureFrame(video), 3000);
+  } catch (e) {
+    blob = null;
+  } finally { if (drive) drive.stillBusy = false; }
+  if (!drive) return;
+  if (!blob) {
+    // The spacing is only consumed by a frame that was actually taken. Marking position
+    // before the capture meant a failing camera silently ate 8 m of road per attempt.
+    drive.capBad = (drive.capBad || 0) + 1;
+    if (drive.capBad >= 8) updateHud(t("capture_failing"));
+    return;
+  }
+  drive.capBad = 0;
+  drive.lastCapPos = pos;
+  drive.lastCapAt = Date.now();
   const fd = new FormData();
   fd.append("photo", blob, "frame.jpg");
   fd.append("lat", pos.lat);
