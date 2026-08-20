@@ -451,12 +451,29 @@ async function loadHealth() {
 // of text, so a hundred of them made a nine megabyte innerHTML that had to be parsed and
 // decoded on every render. An object URL is about forty characters and the blob behind it
 // is decoded once.
+// A photo is a blob from storage, or a data URL string on records written before that
+// change. Both have to end up as something an <img> can show, and the object URL is
+// cached so the same photo is never converted twice.
+function photoSrc(r) {
+  if (!r) return "";
+  if (thumbUrls.has(r.id)) return thumbUrls.get(r.id);
+  const v = r.photo_url;
+  if (v instanceof Blob) {
+    const u = URL.createObjectURL(v);
+    thumbUrls.set(r.id, u);
+    return u;
+  }
+  return v || "";
+}
+
 const thumbUrls = new Map();
 async function ensureThumbs(items) {
   await Promise.all(items.map(async (r) => {
     if (thumbUrls.has(r.id) || !r.photo_url) return;
     try {
-      const blob = await (await fetch(r.photo_url)).blob();
+      // A blob straight from storage needs no conversion at all; a legacy data URL
+      // string still does.
+      const blob = r.photo_url instanceof Blob ? r.photo_url : await (await fetch(r.photo_url)).blob();
       thumbUrls.set(r.id, URL.createObjectURL(blob));
     } catch (e) { thumbUrls.set(r.id, r.photo_url); }   // fall back to the data URL
   }));
@@ -486,7 +503,7 @@ async function loadReports() {
   if (!reports.length) { list.innerHTML = `<div class="empty">${t("no_reports")}</div>`; return; }
   const cardHtml = (r) => `
     <div class="card row" data-id="${r.id}" style="cursor:pointer">
-      <img class="thumb" src="${thumbUrls.get(r.id) || r.photo_url}" alt="" loading="lazy" decoding="async">
+      <img class="thumb" src="${photoSrc(r)}" alt="" loading="lazy" decoding="async">
       <div style="min-width:0">
         <div>${chip(r.status)} ${r.size ? `<span class="chip" style="background:#26272c;color:#cfcfd4">${tSize(r.size)}</span>` : ""}</div>
         <div class="meta">${fmtDate(r.created_at)}${r.address ? " · " + r.address.split(",").slice(0, 2).join(", ") : ""}</div>
@@ -627,7 +644,7 @@ let detailList = [], detailIdx = -1;
 function photoBlock(r) {
   const many = detailList.length > 1;
   return `<div class="photo-wrap">
-      <img class="big-photo" src="${r.photo_url}" alt="" data-zoom="${r.id}">
+      <img class="big-photo" src="${photoSrc(r)}" alt="" data-zoom="${r.id}">
       ${many ? `<button class="navarrow prev" id="navPrev" ${detailIdx <= 0 ? "disabled" : ""}>&lsaquo;</button>
       <button class="navarrow next" id="navNext" ${detailIdx >= detailList.length - 1 ? "disabled" : ""}>&rsaquo;</button>` : ""}
     </div>`;
@@ -1125,7 +1142,7 @@ async function startReview() {
 function nextReviewFrame() {
   if (!reviewQueue.length) { alert(t("review_empty")); show("home"); loadReports(); return; }
   const r = reviewQueue[0];
-  $("reviewPhoto").src = r.photo_url;
+  $("reviewPhoto").src = photoSrc(r);
   $("reviewMeta").innerHTML = t("review_progress", { n: reviewQueue.length, done: reviewDone });
   const verdict = r.is_pothole ? t("lbl_yes") : t("lbl_no");
   $("reviewSaid").innerHTML = t("model_said", { verdict, pct: ((r.confidence || 0) * 100).toFixed(0) });
@@ -1157,7 +1174,7 @@ function vReset() { vState.scale = 1; vState.x = 0; vState.y = 0; vApply(); }
 
 function openViewer(r) {
   vState.rec = r;
-  $("viewerImg").src = r.photo_url;
+  $("viewerImg").src = photoSrc(r);
   $("viewerHint").innerHTML = t("zoom_hint");
   vReset();
   $("viewer").classList.remove("hidden");
