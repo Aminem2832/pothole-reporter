@@ -723,6 +723,8 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
   const putDrive = (d) => op("readwrite", (s) => s.put(d), "drives");
 
   const toDict = (r) => ({ ...r, photo_url: r.photo });
+  // The list never renders the evidence copy, so it never receives it.
+  const listDict = (r) => { const d = toDict(r); delete d.photo_full; return d; };
 
   // ---------- image ----------
   // Between 7 PM and 5 AM a dark frame is lifted so the model can read the road.
@@ -978,7 +980,11 @@ match_index must be null. confidence is your 0 to 1 confidence in the match.`;
       return { ai_configured: !!S.key, provider: "openai", delivery: "gmail_compose", email_configured: true };
     }
     if (path === "/api/reports" && method === "GET") {
-      return (await allReports()).sort((a, b) => b.id - a.id).map(toDict);
+      // Without photo_full. The evidence copy is a 4000px JPEG and the list only shows a
+      // thumbnail, so shipping it here cost about a megabyte per report on every return
+      // to the home screen, and the cost grew with every pothole ever reported. The only
+      // reader of it is the email attachment, which loads the record by id anyway.
+      return (await allReports()).sort((a, b) => b.id - a.id).map(listDict);
     }
     if (path === "/api/reports" && method === "DELETE") {
       await op("readwrite", (s) => s.clear());
